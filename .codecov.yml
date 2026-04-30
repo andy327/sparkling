@@ -1,0 +1,20 @@
+coverage:
+  status:
+    patch:
+      default:
+        target: 80%
+        threshold: 5%
+        informational: true
+        if_not_found: success
+    project:
+      default:
+        target: 80%
+        threshold: 1%
+        informational: true
+        if_not_found: success
+
+comment:
+  layout: "reach,diff,files"
+  behavior: default
+  require_changes: false
+  after_n_builds: 1

@@ -8,14 +8,14 @@ on:
 
 jobs:
   test:
-    name: Test (Scala/SBT)
+    name: Tests and coverage report
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
 
-      - name: Set up JDK 17 (Temurin) with SBT cache
+      - name: Set up JDK 17 (Temurin)
         uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -27,7 +27,7 @@ jobs:
         with:
           apps: sbt
 
-      - name: Cache Ivy2 and Coursier (optional)
+      - name: Cache Ivy2 and Coursier
         uses: actions/cache@v4
         with:
           path: |
@@ -38,18 +38,27 @@ jobs:
           restore-keys: |
             sbt-${{ runner.os }}-
 
-      - name: Run tests
-        run: sbt -v clean test
+      - name: Run tests with coverage
+        run: sbt clean coverage test
+
+      - name: Generate coverage report
+        run: sbt coverageReport
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: true
 
   formatting:
-    name: Scalafmt & Scalafix checks
+    name: Scalafmt and Scalafix checks
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
 
-      - name: Set up JDK 17 (Temurin) with SBT cache
+      - name: Set up JDK 17 (Temurin)
         uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -61,7 +70,7 @@ jobs:
         with:
           apps: sbt
 
-      - name: Cache Ivy2 and Coursier (optional)
+      - name: Cache Ivy2 and Coursier
         uses: actions/cache@v4
         with:
           path: |
