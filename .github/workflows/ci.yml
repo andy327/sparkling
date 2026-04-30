@@ -1,0 +1,79 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    name: Test (Scala/SBT)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17 (Temurin) with SBT cache
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: sbt
+
+      - name: Install SBT (via Coursier)
+        uses: coursier/setup-action@v1
+        with:
+          apps: sbt
+
+      - name: Cache Ivy2 and Coursier (optional)
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.ivy2/cache
+            ~/.cache/coursier
+            ~/.sbt
+          key: sbt-${{ runner.os }}-${{ hashFiles('**/build.sbt', '**/project/*.sbt', '**/project/build.properties') }}
+          restore-keys: |
+            sbt-${{ runner.os }}-
+
+      - name: Run tests
+        run: sbt -v clean test
+
+  formatting:
+    name: Scalafmt & Scalafix checks
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17 (Temurin) with SBT cache
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: sbt
+
+      - name: Install SBT (via Coursier)
+        uses: coursier/setup-action@v1
+        with:
+          apps: sbt
+
+      - name: Cache Ivy2 and Coursier (optional)
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.ivy2/cache
+            ~/.cache/coursier
+            ~/.sbt
+          key: sbt-${{ runner.os }}-${{ hashFiles('**/build.sbt', '**/project/*.sbt', '**/project/build.properties') }}
+          restore-keys: |
+            sbt-${{ runner.os }}-
+
+      - name: Scalafmt check
+        run: sbt scalafmtCheckAll scalafmtSbtCheck
+
+      - name: Scalafix check
+        run: sbt "scalafixAll --check"
