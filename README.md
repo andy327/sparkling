@@ -1,8 +1,8 @@
 <p align="left">
 <picture>
-  <source media="(prefers-color-scheme: light)" srcset="images/sparkling-logo-light.png">
-  <source media="(prefers-color-scheme: dark)" srcset="images/sparkling-logo-dark.png">
-  <img src="images/sparkling-logo-light.png" alt="Sparkling Logo" width="300">
+  <source media="(prefers-color-scheme: light)" srcset="images/sparkling-logo-light.svg">
+  <source media="(prefers-color-scheme: dark)" srcset="images/sparkling-logo-dark.svg">
+  <img src="images/sparkling-logo-light.svg" alt="Sparkling Logo" width="400">
 </picture>
 </p>
 
