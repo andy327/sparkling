@@ -1,0 +1,36 @@
+package com.sparkling.row.convert
+
+import com.sparkling.row.Row
+import com.sparkling.row.codec.ValueCodec
+import com.sparkling.schema.Fields
+
+/** Boilerplate decoder instances for TupleN types.
+  *
+  * Scala tuples are not automatically supported by [[RowDecoder]], because tuple structure spans multiple columns and
+  * therefore cannot be represented by a single [[ValueCodec]].
+  *
+  * This trait generates explicit [[RowDecoder]] instances for tuple arities 2–22. Each instance:
+  *
+  *   - declares a positional schema (`_1`, `_2`, ...)
+  *   - reads values from the input [[Row]] by ordinal position
+  *   - delegates element decoding to [[ValueCodec.decodeUnsafe]] — no `Either` allocation on the hot path
+  *
+  * This allows rows to be decoded into typed tuples while preserving simple ordinal semantics and avoiding reflection
+  * or generic product derivation.
+  */
+private[convert] trait BoilerplateRowDecoderInstances {
+
+  // $COVERAGE-OFF$
+[2..22#  implicit def forTuple1[[#A1#]](implicit
+      [#a1: ValueCodec[A1]#]
+  ): RowDecoder[([#A1#])] =
+    new RowDecoder[([#A1#])] {
+      override val declared: Option[Fields] =
+        Some(RowDecoder.tupleFields(1))
+
+      override def from(row: Row): ([#A1#]) =
+        ([#a1.decodeUnsafe(row.getAt(0))#])
+    }
+#
+]  // $COVERAGE-ON$
+}

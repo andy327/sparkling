@@ -1,0 +1,49 @@
+package com.sparkling.row.convert
+
+import com.sparkling.row.Row
+import com.sparkling.row.codec.ValueCodec
+import com.sparkling.row.types.{RecordSchema, SchemaField}
+import com.sparkling.schema.Fields
+
+/** Boilerplate encoder instances for TupleN types.
+  *
+  * Since tuples represent multiple values, they must be encoded as rows with multiple columns rather than a single cell
+  * value. This trait generates explicit [[RowEncoder]] instances for tuple arities 2–22.
+  *
+  * Each generated converter:
+  *
+  *   - declares a positional schema (`_1`, `_2`, ...)
+  *   - constructs a [[RecordSchema]] using the element [[ValueCodec]] metadata (valueType + nullable)
+  *   - writes tuple elements into a [[Row]] using [[ValueCodec.encode]] in ordinal order
+  *
+  * This keeps tuple encoding explicit and predictable while allowing each element's [[row.types.ValueType]] and
+  * nullability to propagate into the resulting schema.
+  */
+private[convert] trait BoilerplateRowEncoderInstances {
+
+  // $COVERAGE-OFF$
+[2..22#  implicit def forTuple1[[#A1#]](implicit
+      [#a1: ValueCodec[A1]#]
+  ): RowEncoder[([#A1#])] =
+    new RowEncoder[([#A1#])] {
+      override val declared: Fields =
+        RowEncoder.tupleFields(1)
+
+      override val schema: RecordSchema =
+        RecordSchema(
+          Vector(
+            [#SchemaField(declared.names(0), a1.valueType, a1.nullable)#]
+          )
+        )
+
+      override def to(t: ([#A1#])): Row =
+        Row.fromArray(
+          declared,
+          Array[Any](
+            [#a1.encode(t._1)#]
+          )
+        )
+    }
+#
+]  // $COVERAGE-ON$
+}
