@@ -1,4 +1,10 @@
-# Sparkling
+<p align="left">
+<picture>
+  <source media="(prefers-color-scheme: light)" srcset="images/sparkling-logo-light.png">
+  <source media="(prefers-color-scheme: dark)" srcset="images/sparkling-logo-dark.png">
+  <img src="images/sparkling-logo-light.png" alt="Sparkling Logo" width="300">
+</picture>
+</p>
 
 [![CI](https://github.com/andy327/sparkling/actions/workflows/ci.yml/badge.svg)](https://github.com/andy327/sparkling/actions/workflows/ci.yml)
 [![Scaladocs](https://github.com/andy327/sparkling/actions/workflows/scaladocs.yml/badge.svg)](https://github.com/andy327/sparkling/actions/workflows/scaladocs.yml)
