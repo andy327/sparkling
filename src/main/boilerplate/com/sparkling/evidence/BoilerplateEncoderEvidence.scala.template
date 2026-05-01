@@ -1,0 +1,42 @@
+package com.sparkling.evidence
+
+import org.apache.spark.sql.Encoder
+import org.apache.spark.sql.catalyst.encoders.{encoderFor, ExpressionEncoder}
+
+/** Boilerplate encoder instances for tuples.
+  *
+  * Spark does not provide generic encoders for arbitrary tuple arities that compose element encoders correctly,
+  * especially when mixing SQL-native (ExpressionEncoder) and Kryo-encoded values.
+  *
+  * This trait defines explicit EncoderEvidence instances for TupleN types, building structured (struct) encoders whose
+  * fields are encoded using the corresponding element encoders. This allows tuples to remain SQL-visible when all
+  * elements are SQL-encodable, and gracefully fall back to binary fields when some elements require Kryo.
+  */
+private[evidence] trait BoilerplateEncoderEvidence {
+
+  // $COVERAGE-OFF$
+  // Tuple1 (special-cased in Spark internals; easiest to do explicitly)
+  implicit def forTuple1[T1](implicit
+      ev1: EncoderEvidence[T1]
+  ): EncoderEvidence[Tuple1[T1]] =
+    new EncoderEvidence[Tuple1[T1]] {
+      override val encoder: Encoder[Tuple1[T1]] =
+        ExpressionEncoder
+          .tuple(Seq(encoderFor(ev1.encoder)))
+          .asInstanceOf[Encoder[Tuple1[T1]]]
+      override val strategy: EncodingStrategy =
+        EncodingStrategy.Struct(Vector(ev1.strategy))
+    }
+
+[2..22#  implicit def forTuple1[[#T1#]](implicit [#ev1: EncoderEvidence[T1]#]): EncoderEvidence[([#T1#])] =
+    new EncoderEvidence[([#T1#])] {
+      override val encoder: Encoder[([#T1#])] =
+        ExpressionEncoder
+          .tuple(Seq([#encoderFor(ev1.encoder)#]))
+          .asInstanceOf[Encoder[([#T1#])]]
+      override val strategy: EncodingStrategy =
+        EncodingStrategy.Struct(Vector([#ev1.strategy#]))
+    }
+#
+]  // $COVERAGE-ON$
+}

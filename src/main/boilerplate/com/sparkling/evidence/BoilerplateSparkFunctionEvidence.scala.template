@@ -1,0 +1,28 @@
+package com.sparkling.evidence
+
+import scala.reflect.runtime.universe.TypeTag
+
+import org.apache.spark.sql.expressions.UserDefinedFunction
+import org.apache.spark.sql.{functions => sqlf}
+
+trait BoilerplateSparkFunctionEvidence {
+[1..5#  implicit def forFunction1[[#T1: TypeTag#], R: TypeTag]: SparkFunctionEvidence.Aux[([#T1#]) => R, R] =
+    new SparkFunctionEvidence[([#T1#]) => R] {
+      type Elem = R
+      def udf(f: ([#T1#]) => R): UserDefinedFunction = sqlf.udf(f)
+      def udfExplode[A: TypeTag](f: ([#T1#]) => R)(implicit ee: ExplodeEvidence.Aux[R, A]): UserDefinedFunction =
+        sqlf.udf(([#t1: T1#]) => ee.toSeq(f([#t1#])))
+    }
+#
+]
+  // $COVERAGE-OFF$
+[6..10#  implicit def forFunction1[[#T1: TypeTag#], R: TypeTag]: SparkFunctionEvidence.Aux[([#T1#]) => R, R] =
+    new SparkFunctionEvidence[([#T1#]) => R] {
+      type Elem = R
+      def udf(f: ([#T1#]) => R): UserDefinedFunction = sqlf.udf(f)
+      def udfExplode[A: TypeTag](f: ([#T1#]) => R)(implicit ee: ExplodeEvidence.Aux[R, A]): UserDefinedFunction =
+        sqlf.udf(([#t1: T1#]) => ee.toSeq(f([#t1#])))
+    }
+#
+]  // $COVERAGE-ON$
+}

@@ -1,0 +1,24 @@
+package com.sparkling.evidence
+
+import scala.reflect.runtime.universe.TypeTag
+
+import org.apache.spark.sql.expressions.UserDefinedFunction
+import org.apache.spark.sql.{functions => sqlf}
+
+trait BoilerplateSparkPredicateEvidence {
+[1..5#  implicit def forFunction1[[#T1: TypeTag#]]: SparkPredicateEvidence[([#T1#]) => Boolean] =
+    new SparkPredicateEvidence[([#T1#]) => Boolean] {
+      override def udf(f: ([#T1#]) => Boolean): UserDefinedFunction =
+        sqlf.udf(f)
+    }
+#
+]
+  // $COVERAGE-OFF$
+[6..10#  implicit def forFunction1[[#T1: TypeTag#]]: SparkPredicateEvidence[([#T1#]) => Boolean] =
+    new SparkPredicateEvidence[([#T1#]) => Boolean] {
+      override def udf(f: ([#T1#]) => Boolean): UserDefinedFunction =
+        sqlf.udf(f)
+    }
+#
+]  // $COVERAGE-ON$
+}
