@@ -3,7 +3,7 @@ package com.sparkling.row
 import org.scalatest.matchers.should.Matchers._
 import org.scalatest.wordspec.AnyWordSpec
 
-import com.sparkling.row.codec.Completeness
+import com.sparkling.row.codec.FieldPresence
 import com.sparkling.schema.Fields
 
 final class RowIOSpec extends AnyWordSpec {
@@ -30,37 +30,37 @@ final class RowIOSpec extends AnyWordSpec {
     }
   }
 
-  "Completeness" should {
-    "consider String complete if and only if non-null and non-blank" in {
-      implicitly[Completeness[String]].isComplete("x") shouldBe true
-      implicitly[Completeness[String]].isComplete(null.asInstanceOf[String]) shouldBe false
-      implicitly[Completeness[String]].isComplete("   ") shouldBe false
+  "FieldPresence" should {
+    "consider String present if and only if non-null and non-blank" in {
+      implicitly[FieldPresence[String]].isPresent("x") shouldBe true
+      implicitly[FieldPresence[String]].isPresent(null.asInstanceOf[String]) shouldBe false
+      implicitly[FieldPresence[String]].isPresent("   ") shouldBe false
     }
 
-    "consider Int and Long always complete" in {
-      implicitly[Completeness[Int]].isComplete(0) shouldBe true
-      implicitly[Completeness[Long]].isComplete(0L) shouldBe true
+    "consider Int and Long always present" in {
+      implicitly[FieldPresence[Int]].isPresent(0) shouldBe true
+      implicitly[FieldPresence[Long]].isPresent(0L) shouldBe true
     }
 
-    "consider Double incomplete when NaN" in {
-      implicitly[Completeness[Double]].isComplete(1.0) shouldBe true
-      implicitly[Completeness[Double]].isComplete(Double.NaN) shouldBe false
+    "consider Double absent when NaN" in {
+      implicitly[FieldPresence[Double]].isPresent(1.0) shouldBe true
+      implicitly[FieldPresence[Double]].isPresent(Double.NaN) shouldBe false
     }
 
     "compose for tuples" in {
-      val c2 = implicitly[Completeness[(String, Int)]]
-      c2.isComplete(("ok", 1)) shouldBe true
-      c2.isComplete((null.asInstanceOf[String], 1)) shouldBe false
+      val c2 = implicitly[FieldPresence[(String, Int)]]
+      c2.isPresent(("ok", 1)) shouldBe true
+      c2.isPresent((null.asInstanceOf[String], 1)) shouldBe false
 
-      val c3 = implicitly[Completeness[(String, Int, Double)]]
-      c3.isComplete(("ok", 1, 2.0)) shouldBe true
-      c3.isComplete(("ok", 1, Double.NaN)) shouldBe false
+      val c3 = implicitly[FieldPresence[(String, Int, Double)]]
+      c3.isPresent(("ok", 1, 2.0)) shouldBe true
+      c3.isPresent(("ok", 1, Double.NaN)) shouldBe false
     }
 
-    "build a predicate-backed Completeness instance" in {
-      val even = Completeness[Int](_ % 2 == 0)
-      even.isComplete(2) shouldBe true
-      even.isComplete(3) shouldBe false
+    "build a predicate-backed FieldPresence instance" in {
+      val even = FieldPresence[Int](_ % 2 == 0)
+      even.isPresent(2) shouldBe true
+      even.isPresent(3) shouldBe false
     }
   }
 }
