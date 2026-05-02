@@ -1,0 +1,33 @@
+package com.sparkling.syntax
+
+import scala.language.implicitConversions
+
+import com.sparkling.schema.Fields
+
+trait BoilerplateFieldsSyntax {
+
+  // Tuple -> Fields conversions
+[2..3#  implicit def tuple1ToFields(t: ([#String#])): Fields =
+    Fields([#t._1#])
+#
+]
+  // $COVERAGE-OFF$
+[4..22#  implicit def tuple1ToFields(t: ([#String#])): Fields =
+    Fields([#t._1#])
+#
+]  // $COVERAGE-ON$
+}
+
+trait BoilerplateToFieldsTupleInstances { self: FieldsSyntax =>
+
+  // ToFields instances for tuple (String,..)
+[2..3#  implicit val fromTuple1: ToFields[([#String#])] =
+    (t: ([#String#])) => Fields([#t._1#])
+#
+]
+  // $COVERAGE-OFF$
+[4..22#  implicit val fromTuple1: ToFields[([#String#])] =
+    (t: ([#String#])) => Fields([#t._1#])
+#
+]  // $COVERAGE-ON$
+}
