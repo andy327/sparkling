@@ -2,7 +2,7 @@ package com.sparkling.frame
 
 import scala.collection.immutable.ArraySeq
 
-import org.apache.spark.sql.types.{DataType, StructType}
+import org.apache.spark.sql.types.{ArrayType, DataType, MapType, StructType}
 import org.apache.spark.sql.{functions => sqlf, Column, DataFrame, Encoder}
 import org.apache.spark.storage.StorageLevel
 
@@ -535,6 +535,14 @@ final case class Frame(df: DataFrame) {
     Frame(df.na.fill(value, fs.names))
   }
 
+  /** Replaces null values in the given columns with an `Int` fill value.
+    *
+    * @param fs columns to fill (must be non-empty)
+    * @param value replacement value for nulls
+    * @throws java.lang.IllegalArgumentException if `fs` is empty
+    */
+  def fillNulls(fs: Fields, value: Int): Frame = fillNulls(fs, value.toLong)
+
   /** Replaces null values in the given columns with a `Long` fill value.
     *
     * @param fs columns to fill (must be non-empty)
@@ -588,8 +596,12 @@ final case class Frame(df: DataFrame) {
     * and the rest are dropped.
     *
     * @param fs columns to deduplicate on (must be non-empty)
+    * @throws java.lang.IllegalArgumentException if `fs` is empty
     */
-  def distinct(fs: Fields): Frame = Frame(df.dropDuplicates(fs.names))
+  def distinct(fs: Fields): Frame = {
+    require(fs.nonEmpty, "distinct requires at least one field")
+    Frame(df.dropDuplicates(fs.names))
+  }
 
   /** Drops rows where any of the given columns is null.
     *
@@ -642,5 +654,192 @@ final case class Frame(df: DataFrame) {
       case None    => df.sample(withReplacement = withReplacement, fraction = fraction)
     }
     Frame(out)
+  }
+
+  // ── Transforms ──────────────────────────────────────────────────────────────
+
+  /** Explodes an array column into one row per element, writing results to one or more output columns.
+    *
+    * If `out` is a single field, the exploded element is written directly to that column. If `out` has multiple
+    * fields, the array elements must be structs; each struct's fields are unpacked by position into the output columns
+    * (equivalent to calling `unpack` after exploding).
+    *
+    * The input column is dropped from the output.
+    *
+    * @param fs mapping from the array input column to one or more output columns (output must be non-empty)
+    * @param outer if true, rows with a null or empty array produce one output row with null values (SQL
+    *   `EXPLODE_OUTER`); if false, such rows are dropped (default)
+    * @throws java.lang.IllegalArgumentException if output fields are empty
+    */
+  def flatten(fs: (Field, Fields), outer: Boolean = false): Frame = {
+    val (in, out) = fs
+    require(out.nonEmpty, "flatten requires at least one output field")
+
+    val tmp = Field.tmp(prefix = s"${in.name}_elem_")
+    val explodeFn = if (outer) sqlf.explode_outer _ else sqlf.explode _
+    // Explode into tmp and drop the input column in one step; keeps the plan clean.
+    val exploded = df.withColumn(tmp.name, explodeFn(sqlf.col(in.name))).drop(in.name)
+
+    val outDf =
+      if (out.isSingle)
+        exploded.withColumnRenamed(tmp.name, out.names.head)
+      else
+        Frame(exploded).unpack(tmp -> out).df
+
+    Frame(outDf)
+  }
+
+  /** Rotates multiple input columns into rows of (key, value) pairs.
+    *
+    * Each input column name becomes a value of `keyField` and the column's value becomes the value of `valueField`.
+    * All other columns are preserved unchanged. Input columns are dropped from the output.
+    *
+    * Example: unpivoting `("a", "b")` from `(id=1, a=10, b=20)` with `key="col"` and `value="val"` yields:
+    * {{{
+    * (id=1, col="a", val=10)
+    * (id=1, col="b", val=20)
+    * }}}
+    *
+    * @param in input columns to unpivot (must be non-empty and must exist in this Frame)
+    * @param keyField output column that receives the source column name
+    * @param valueField output column that receives the source column value
+    * @throws java.lang.IllegalArgumentException if `in` is empty or any field is missing
+    */
+  def unpivot(in: Fields, keyField: Field, valueField: Field): Frame = {
+    require(in.nonEmpty, "unpivot requires at least one input field")
+    require(hasFields(in), s"unpivot input fields must exist: ${in.names.mkString(", ")}")
+
+    val tmp = Field.tmp(prefix = "__unpivot_")
+    val keepCols = df.columns.toSeq.filterNot(in.containsName).map(sqlf.col)
+    val pairs = in.names.map { n =>
+      sqlf.struct(sqlf.lit(n).as(keyField.name), sqlf.col(n).as(valueField.name))
+    }
+    val exploded =
+      df.select((keepCols :+ sqlf.explode(sqlf.array(pairs: _*)).as(tmp.name)): _*)
+
+    Frame(exploded).unpack(tmp -> Fields(keyField.name, valueField.name))
+  }
+
+  /** Recursively unpivots nested columns (structs, arrays, maps) into a flat sequence of (path, value) pairs.
+    *
+    * Traverses each input column's schema recursively. Terminal (scalar) values produce one row per leaf with a
+    * dot-separated path as the key (e.g. `"address.city"`) and the value cast to `String`. Null containers produce
+    * one row with the container's path and a null value. All other columns are preserved.
+    *
+    * @param in input columns to recursively unpivot (must be non-empty and must exist in this Frame)
+    * @param keyField output column that receives the dot-separated path to the leaf
+    * @param valueField output column that receives the leaf value cast to `String`
+    * @throws java.lang.IllegalArgumentException if `in` is empty or any field is missing
+    */
+  def deepUnpivot(in: Fields, keyField: Field, valueField: Field): Frame = {
+    require(in.nonEmpty, "deepUnpivot requires at least one input field")
+    require(hasFields(in), s"deepUnpivot input fields must exist: ${in.names.mkString(", ")}")
+
+    val tmp = Field.tmp(prefix = "__deepUnpivot_")
+    val keepCols = df.columns.toSeq.filterNot(in.containsName).map(sqlf.col)
+
+    def mkPair(path: Column, value: Column): Column =
+      sqlf.struct(path.as(keyField.name), value.cast("string").as(valueField.name))
+
+    def traverse(dt: DataType, c: Column, path: Column): Column = {
+      val nonNull: Column = dt match {
+        case StructType(fields) =>
+          val children = fields.map { f =>
+            val childPath =
+              sqlf.when(path.isNull, sqlf.lit(f.name))
+                .otherwise(sqlf.concat_ws(".", path, sqlf.lit(f.name)))
+            traverse(f.dataType, c.getField(f.name), childPath)
+          }
+          sqlf.flatten(sqlf.array(children.toIndexedSeq: _*))
+
+        case ArrayType(elemType, _) =>
+          sqlf.flatten(sqlf.transform(c, elem => traverse(elemType, elem, path)))
+
+        case MapType(_, valueType, _) =>
+          sqlf.flatten(
+            sqlf.transform(
+              sqlf.map_entries(c),
+              entry => {
+                val keyPath =
+                  sqlf.when(path.isNull, entry.getField("key").cast("string"))
+                    .otherwise(sqlf.concat_ws(".", path, entry.getField("key").cast("string")))
+                traverse(valueType, entry.getField("value"), keyPath)
+              }
+            )
+          )
+
+        case _ =>
+          sqlf.array(mkPair(path, c))
+      }
+      sqlf.when(c.isNull, sqlf.array(mkPair(path, sqlf.lit(null)))).otherwise(nonNull)
+    }
+
+    val rootPairs = in.names.map { name =>
+      val dt = df.schema(name).dataType
+      traverse(dt, sqlf.col(name), sqlf.lit(name))
+    }
+
+    val exploded =
+      df.select(
+        (keepCols :+
+          sqlf.explode(sqlf.flatten(sqlf.array(rootPairs: _*))).as(tmp.name)): _*
+      )
+
+    Frame(exploded).unpack(tmp -> Fields(keyField.name, valueField.name))
+  }
+
+  /** Adds a column of monotonically increasing 64-bit IDs.
+    *
+    * IDs are unique and non-negative within a single job but are not consecutive, are not stable across re-runs, and
+    * should not be used as durable surrogate keys.
+    *
+    * @param out output column to write the ID into
+    */
+  def uniqueId(out: Field): Frame =
+    Frame(df.withColumn(out.name, sqlf.monotonically_increasing_id()))
+
+  /** Adds a column of randomly generated UUIDs (version 4).
+    *
+    * Each row receives a distinct UUID string of the form `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx`.
+    *
+    * @param out output column to write the UUID into
+    */
+  def uuid(out: Field): Frame =
+    Frame(df.withColumn(out.name, sqlf.uuid()))
+
+  /** Hashes the given input columns into a single 64-bit output column using `xxhash64`.
+    *
+    * @param fs mapping from input columns (must be non-empty) to the output column
+    * @throws java.lang.IllegalArgumentException if input fields are empty
+    */
+  def hash(fs: (Fields, Field)): Frame = {
+    val (in, out) = fs
+    require(in.nonEmpty, "hash requires at least one input field")
+    Frame(df.withColumn(out.name, sqlf.xxhash64(in.names.map(sqlf.col): _*)))
+  }
+
+  /** Hashes all columns in schema order into a single 64-bit output column using `xxhash64`.
+    *
+    * @note The hash depends on the current schema column order. Reordering or adding columns changes the hash values.
+    * @param out output column to write the hash into
+    */
+  def hash(out: Field): Frame = {
+    val cols = ArraySeq.unsafeWrapArray(df.columns.map(sqlf.col))
+    Frame(df.withColumn(out.name, sqlf.xxhash64(cols: _*)))
+  }
+
+  /** Returns the first non-null value across the given input columns, written to an output column.
+    *
+    * Equivalent to SQL `COALESCE(col1, col2, ...)`. Input columns are evaluated left to right; the first non-null
+    * value is returned. If all inputs are null, the output is null.
+    *
+    * @note Not to be confused with [[coalesce(numPartitions:Int)*]], which reduces the number of partitions.
+    * @param fs mapping from input columns (must be non-empty) to the output column
+    * @throws java.lang.IllegalArgumentException if input fields are empty
+    */
+  def firstNonNull(fs: (Fields, Field)): Frame = {
+    val (in, out) = fs
+    require(in.nonEmpty, "firstNonNull requires at least one input field")
+    Frame(df.withColumn(out.name, sqlf.coalesce(in.names.map(sqlf.col): _*)))
   }
 }

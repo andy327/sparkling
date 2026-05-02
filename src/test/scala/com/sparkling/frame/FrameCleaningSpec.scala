@@ -52,6 +52,18 @@ final class FrameCleaningSpec extends AnyWordSpec with SparkSuite {
     }
   }
 
+  "Frame.fillNulls (Int)" should {
+    "replace nulls in specified columns with the given value" in {
+      val df = Seq[(java.lang.Long, java.lang.Long)](
+        (1L, null),
+        (null, 2L)
+      ).toDF("a", "b")
+      val out = df.frame.fillNulls("a", 0).df
+
+      out.collect().toList shouldBe List(Row(1L, null), Row(0L, 2L))
+    }
+  }
+
   "Frame.fillNulls (Boolean)" should {
     "replace nulls in specified columns with the given value" in {
       val df = Seq[(java.lang.Boolean, java.lang.Boolean)](
@@ -125,6 +137,14 @@ final class FrameCleaningSpec extends AnyWordSpec with SparkSuite {
     "deduplicate on the specified columns only" in {
       val df = Seq((1, "a"), (1, "b"), (2, "a")).toDF("x", "y")
       df.frame.distinct("x").count() shouldBe 2L
+    }
+
+    "throw when fields are empty" in {
+      val df = Seq((1, "a")).toDF("x", "y")
+      val ex = intercept[IllegalArgumentException] {
+        df.frame.distinct(Fields.empty)
+      }
+      ex.getMessage should include("distinct requires at least one field")
     }
   }
 
