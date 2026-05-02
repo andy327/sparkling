@@ -522,7 +522,7 @@ final case class Frame(df: DataFrame) {
     Frame(resultDf)
   }
 
-  // ── Cleaning ────────────────────────────────────────────────────────────────
+  // ── Cleaning ───────────────────────────────────────────────────────────────
 
   /** Replaces null values in the given columns with a `Double` fill value.
     *
@@ -656,7 +656,7 @@ final case class Frame(df: DataFrame) {
     Frame(out)
   }
 
-  // ── Transforms ──────────────────────────────────────────────────────────────
+  // ── Transforms ─────────────────────────────────────────────────────────────
 
   /** Explodes an array column into one row per element, writing results to one or more output columns.
     *
@@ -841,5 +841,119 @@ final case class Frame(df: DataFrame) {
     val (in, out) = fs
     require(in.nonEmpty, "firstNonNull requires at least one input field")
     Frame(df.withColumn(out.name, sqlf.coalesce(in.names.map(sqlf.col): _*)))
+  }
+
+  // ── Relational ─────────────────────────────────────────────────────────────
+
+  /** Hints to Spark that this Frame is small enough to broadcast in a join.
+    *
+    * Equivalent to wrapping the underlying DataFrame with `sqlf.broadcast`. Useful when joining a small lookup table
+    * against a large one to avoid a shuffle.
+    */
+  def broadcast(): Frame = Frame(sqlf.broadcast(df))
+
+  /** Joins this Frame against `other` on explicitly named key columns.
+    *
+    * Left and right key fields are matched by position; both sides must have equal arity. Column names that exist on
+    * both sides after the join are disambiguated automatically by Spark (accessible via `frame.col("name")`).
+    *
+    * @param on mapping from left key columns to right key columns (must be non-empty and equal in size)
+    * @param other Frame to join against
+    * @param how join strategy (default [[JoinType.Inner]])
+    * @throws java.lang.IllegalArgumentException if key arities differ or no keys are provided
+    */
+  def join(on: (Fields, Fields), other: Frame, how: JoinType = JoinType.Inner): Frame = {
+    val (leftKeys, rightKeys) = on
+    require(
+      leftKeys.size == rightKeys.size,
+      s"join requires same arity (left=${leftKeys.size}, right=${rightKeys.size})"
+    )
+    val cond =
+      leftKeys.names
+        .zip(rightKeys.names)
+        .map { case (l, r) => df(l) === other.df(r) }
+        .reduceOption(_ && _)
+        .getOrElse(throw new IllegalArgumentException("join requires at least one key field"))
+    Frame(df.join(other.df, cond, how.sparkName))
+  }
+
+  /** Joins this Frame against `other` on shared key columns (same name on both sides).
+    *
+    * A convenience overload for the common case where the join keys have the same name in both frames. The shared key
+    * column appears exactly once in the result (Spark deduplicates it automatically). For asymmetric key names use
+    * the `(Fields, Fields)` overload, where both copies are retained.
+    *
+    * @param on key columns present (by the same name) in both frames (must be non-empty)
+    * @param other Frame to join against
+    * @param how join strategy (default [[JoinType.Inner]])
+    * @throws java.lang.IllegalArgumentException if `on` is empty
+    */
+  def join(on: Fields, other: Frame, how: JoinType): Frame =
+    Frame(df.join(other.df, on.names, how.sparkName))
+
+  /** Joins this Frame against `other` on shared key columns using an inner join. */
+  def join(on: Fields, other: Frame): Frame =
+    Frame(df.join(other.df, on.names, JoinType.Inner.sparkName))
+
+  /** Stacks this Frame on top of `other`, aligning columns by name and padding missing columns with nulls.
+    *
+    * Equivalent to `Frame.merge(Seq(this, other))`.
+    *
+    * @param other Frame to union with
+    */
+  def ++(other: Frame): Frame = Frame.merge(Seq(this, other))
+}
+
+object Frame {
+
+  /** Combines multiple Frames by stacking their rows, aligning columns by name.
+    *
+    * Three behaviors depending on column overlap:
+    *   - All frames share the exact same schema: plain `UNION ALL` by name.
+    *   - `keepAll = true` (default): extra columns from any frame are kept; frames missing a column have it padded
+    *     with nulls.
+    *   - `keepAll = false`: only columns common to every frame are retained; extra columns are dropped.
+    *
+    * @param frames frames to merge (must be non-empty)
+    * @param keepAll if true, retain all columns across all frames, padding absent ones with null; if false, project to
+    *   the common schema only (default true)
+    * @throws java.lang.IllegalArgumentException if `frames` is empty or no common columns exist
+    */
+  def merge(frames: Seq[Frame], keepAll: Boolean = true): Frame = {
+    require(frames.nonEmpty, "merge requires at least one input")
+
+    if (frames.size == 1) frames.head
+    else {
+      val dataFrames = frames.map(_.df)
+      val commonColumnSet = dataFrames.iterator.map(_.columns.toSet).reduce(_ intersect _)
+      val commonColumns = dataFrames.head.columns.filter(commonColumnSet).toSeq
+      require(commonColumns.nonEmpty, "merge requires at least one column in common across all frames")
+
+      val allHaveOnlyCommon = dataFrames.forall(_.columns.toSet == commonColumnSet)
+
+      if (allHaveOnlyCommon) {
+        Frame(dataFrames.reduce(_ unionByName _))
+      } else if (keepAll) {
+        val extraColumns =
+          dataFrames.iterator
+            .flatMap(_.columns.iterator.filterNot(commonColumnSet))
+            .toVector
+            .distinct
+
+        val aligned = dataFrames.map { df =>
+          val present = df.columns.toSet
+          val commonExprs = commonColumns.map(df.col)
+          val extraExprs = extraColumns.map { name =>
+            if (present.contains(name)) df.col(name)
+            else sqlf.lit(null).as(name)
+          }
+          df.select((commonExprs ++ extraExprs): _*)
+        }
+        Frame(aligned.reduce(_ unionByName _))
+      } else {
+        val projected = dataFrames.map(_.select(commonColumns.map(sqlf.col): _*))
+        Frame(projected.reduce(_ unionByName _))
+      }
+    }
   }
 }
