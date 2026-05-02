@@ -2,7 +2,7 @@ package com.sparkling.frame
 
 import scala.collection.immutable.ArraySeq
 
-import org.apache.spark.sql.types.StructType
+import org.apache.spark.sql.types.{DataType, StructType}
 import org.apache.spark.sql.{functions => sqlf, Column, DataFrame, Encoder}
 import org.apache.spark.storage.StorageLevel
 
@@ -241,5 +241,284 @@ final case class Frame(df: DataFrame) {
     require(fs.nonEmpty, "orderBy requires at least one field")
     val cols = fs.map { case (f, desc) => if (desc) sqlf.col(f.name).desc else sqlf.col(f.name) }
     Frame(df.orderBy(cols: _*))
+  }
+
+  /** Keeps only the specified columns, preserving their order.
+    *
+    * @param fs columns to keep (in the desired output order)
+    */
+  def project(fs: Fields): Frame =
+    Frame(df.select(fs.names.map(sqlf.col): _*))
+
+  /** Drops the specified columns.
+    *
+    * @param fs columns to drop
+    */
+  def discard(fs: Fields): Frame =
+    Frame(df.drop(fs.names: _*))
+
+  /** Renames one or more columns.
+    *
+    * Examples:
+    * {{{
+    * frame.rename("some_field" -> "someField")
+    * frame.rename(("a", "b") -> ("x", "y"))
+    * }}}
+    *
+    * @param fs mapping from existing column names to new column names (must have equal arity)
+    * @throws java.lang.IllegalArgumentException if the mapping arity differs
+    */
+  def rename(fs: (Fields, Fields)): Frame = {
+    val (from, to) = fs
+    require(from.size == to.size, s"rename requires same arity (from=${from.size}, to=${to.size})")
+
+    val renamed =
+      from.names.zip(to.names).foldLeft(df) { case (acc, (src, dst)) =>
+        acc.withColumnRenamed(src, dst)
+      }
+
+    Frame(renamed)
+  }
+
+  /** Copies one or more columns under new names, keeping the originals.
+    *
+    * Note: unlike a SQL alias (which renames in place), this adds new columns while preserving the source columns.
+    * To rename without keeping the original, use [[rename]].
+    *
+    * Examples:
+    * {{{
+    * frame.alias("someField" -> "someFieldAlias")
+    * frame.alias(("a", "b") -> ("x", "y"))
+    * }}}
+    *
+    * @param fs mapping from source columns to new alias columns (must have equal arity)
+    * @throws java.lang.IllegalArgumentException if the mapping arity differs
+    */
+  def alias(fs: (Fields, Fields)): Frame = {
+    val (from, to) = fs
+    require(from.size == to.size, s"alias requires same arity (from=${from.size}, to=${to.size})")
+
+    val withAliases =
+      from.names.zip(to.names).foldLeft(df) { case (acc, (src, dst)) =>
+        acc.withColumn(dst, sqlf.col(src))
+      }
+
+    Frame(withAliases)
+  }
+
+  /** Packs multiple input fields into a single struct column.
+    *
+    * The struct field names match the input column names.
+    *
+    * @param fs mapping from input fields (must be non-empty) to a single output field
+    * @throws java.lang.IllegalArgumentException if the input fields are empty
+    */
+  def pack(fs: (Fields, Field)): Frame = {
+    val (in, out) = fs
+    require(in.nonEmpty, "pack requires at least one input field")
+
+    val structExpr = sqlf.struct(in.names.map(n => sqlf.col(n).as(n)): _*)
+    Frame(df.withColumn(out.name, structExpr))
+  }
+
+  /** Unpacks a nested struct or array column into multiple top-level columns, dropping the input column.
+    *
+    * Behavior depends on the input column type:
+    *   - `StructType`: fields are extracted by name (schema order) and renamed to the provided output names; output
+    *     arity must match the struct arity exactly.
+    *   - `ArrayType`: elements are extracted by index.
+    *
+    * @param fs mapping from an input field to output fields (output must be non-empty)
+    * @throws java.lang.IllegalArgumentException if output fields are empty, arity mismatches, or the input column is
+    *   not a `StructType` or `ArrayType`
+    */
+  def unpack(fs: (Field, Fields)): Frame = {
+    val (in, out) = fs
+    require(out.nonEmpty, "unpack requires at least one output field")
+
+    val dt = df.schema(in.name).dataType
+    val inCol = sqlf.col(in.name)
+
+    val unpackedExprs: IndexedSeq[Column] = dt match {
+      case StructType(structFields) =>
+        require(
+          out.size == structFields.length,
+          s"provided ${out.size} output fields but struct has ${structFields.length} fields"
+        )
+        structFields.indices.map(i => inCol.getField(structFields(i).name).as(out.names(i)))
+
+      case org.apache.spark.sql.types.ArrayType(_, _) =>
+        out.names.indices.map(i => inCol.getItem(i).as(out.names(i)))
+
+      case other =>
+        throw new IllegalArgumentException(s"can only unpack a StructType or ArrayType, not $other")
+    }
+
+    val withOut =
+      out.names
+        .zip(unpackedExprs)
+        .foldLeft(df) { case (acc, (name, expr)) => acc.withColumn(name, expr) }
+
+    Frame(withOut.drop(in.name))
+  }
+
+  /** Unpacks a struct column into top-level fields using the struct's own field names, dropping the input column.
+    *
+    * This is a convenience overload for the common case where you do not need to rename the unpacked fields.
+    *
+    * @param in struct field to unpack
+    * @throws java.lang.IllegalArgumentException if `in` is not a `StructType`
+    */
+  def unpack(in: Field): Frame = {
+    val dt = df.schema(in.name).dataType
+    dt match {
+      case StructType(structFields) =>
+        val out = Fields.fromSeq(structFields.iterator.map(_.name).toSeq)
+        unpack(in -> out)
+      case other =>
+        throw new IllegalArgumentException(s"unpack(Field) requires a StructType column, not $other")
+    }
+  }
+
+  /** Writes a constant literal value into one or more output columns.
+    *
+    * If an output column already exists it is overwritten; otherwise it is appended.
+    *
+    * @param out output columns to write (must be non-empty)
+    * @param value literal value to write into each output column
+    * @tparam T value type
+    * @throws java.lang.IllegalArgumentException if `out` is empty
+    */
+  def insert[T](out: Fields, value: T): Frame = {
+    require(out.nonEmpty, "insert requires at least one output field")
+    val literal = sqlf.lit(value)
+    val resultDf = out.names.foldLeft(df)((acc, name) => acc.withColumn(name, literal))
+    Frame(resultDf)
+  }
+
+  /** Casts one or more columns to the given Spark `DataType`, writing results to output columns.
+    *
+    * Input and output field sets must have equal arity. To cast a column in place, use the single-field overload.
+    *
+    * @param fs mapping from input columns to output columns (both sides must be non-empty and equal in size)
+    * @param dataType target Spark SQL `DataType`
+    * @throws java.lang.IllegalArgumentException if either field set is empty or arities differ
+    */
+  def cast(fs: (Fields, Fields), dataType: DataType): Frame = {
+    val (in, out) = fs
+    require(in.nonEmpty, "cast requires at least one input field")
+    require(out.nonEmpty, "cast requires at least one output field")
+    require(in.size == out.size, s"cast requires same arity (in=${in.size}, out=${out.size})")
+
+    val outDf =
+      in.names.zip(out.names).foldLeft(df) { case (acc, (src, dst)) =>
+        acc.withColumn(dst, acc.col(src).cast(dataType))
+      }
+
+    Frame(outDf)
+  }
+
+  /** Casts a single column to the given Spark `DataType` in place.
+    *
+    * @param field column to cast
+    * @param dataType target Spark SQL `DataType`
+    */
+  def cast(field: Field, dataType: DataType): Frame =
+    cast(Fields.one(field) -> Fields.one(field), dataType)
+
+  /** Adds or replaces a column using a Spark SQL expression.
+    *
+    * @param field output column to write
+    * @param expr expression to write into `field`
+    */
+  def withColumn(field: Field, expr: Column): Frame =
+    Frame(df.withColumn(field.name, expr))
+
+  /** Adds or replaces columns using a single Spark SQL expression.
+    *
+    * If `fields.size == 1`, the expression may return any Spark-supported type and is written directly.
+    *
+    * If `fields.size > 1`, the expression must evaluate to a Spark struct (e.g., a tuple or case class); the struct's
+    * fields are expanded into the output columns by position. If the struct contains more fields than `fields`, the
+    * extra struct fields are ignored.
+    *
+    * @param fields output columns to write (must be non-empty)
+    * @param expr expression to write; if `fields.size > 1` it must be a struct with at least `fields.size` fields
+    * @throws java.lang.IllegalArgumentException if `fields` is empty or if multi-output expansion fails
+    */
+  def withColumns(fields: Fields, expr: Column): Frame =
+    assignColumns(fields, expr)
+
+  /** Adds or replaces columns using a sequence of Spark SQL expressions.
+    *
+    * Each expression is written to the corresponding output field by position. The number of expressions must match
+    * `fields.size`.
+    *
+    * @param fields output columns to write (must be non-empty)
+    * @param cols expressions to write; must have the same size as `fields`
+    * @throws java.lang.IllegalArgumentException if `fields` is empty or if `cols.size != fields.size`
+    */
+  def withColumns(fields: Fields, cols: Seq[Column]): Frame =
+    assignColumns(fields, cols)
+
+  /** Writes a single expression into one or more output columns.
+    *
+    * For single output, writes the expression directly. For multiple outputs, the expression must return a struct;
+    * the struct fields are expanded into the output columns by position.
+    */
+  private[frame] def assignColumns(out: Fields, expr: Column): Frame = {
+    require(out.nonEmpty, "output fields must be non-empty")
+
+    val resultDf =
+      if (out.isSingle) {
+        df.withColumn(out.names.head, expr)
+      } else {
+        val tmp = Field.tmp(prefix = "__tmp_")
+
+        val withTmp = df.withColumn(tmp.name, expr)
+
+        val st = withTmp.schema(tmp.name).dataType match {
+          case s: StructType => s
+          case other         =>
+            throw new IllegalArgumentException(
+              s"cannot write ${out.size} output columns because expression did not return a struct. " +
+                s"Return a tuple/case class (struct) or use a single output column. Got: $other"
+            )
+        }
+
+        val structArity = st.fields.length
+        if (structArity < out.size) {
+          val want = out.names.mkString(", ")
+          val got = st.fieldNames.mkString(", ")
+          throw new IllegalArgumentException(
+            s"output arity mismatch: requested ${out.size} columns ($want) but expression returned $structArity fields ($got)"
+          )
+        }
+
+        val tmpCol = sqlf.col(tmp.name)
+        val expanded =
+          out.names.zipWithIndex.foldLeft(withTmp) { case (acc, (name, i)) =>
+            acc.withColumn(name, tmpCol.getField(st.fieldNames(i)))
+          }
+
+        expanded.drop(tmp.name)
+      }
+
+    Frame(resultDf)
+  }
+
+  /** Writes a sequence of expressions into output columns by position. */
+  private[frame] def assignColumns(out: Fields, cols: Seq[Column]): Frame = {
+    require(out.nonEmpty, "output fields must be non-empty")
+    require(
+      cols.size == out.size,
+      s"output arity mismatch: requested ${out.size} columns but got ${cols.size} expressions"
+    )
+
+    val resultDf = out.names
+      .zip(cols)
+      .foldLeft(df) { case (acc, (name, c)) => acc.withColumn(name, c) }
+
+    Frame(resultDf)
   }
 }
