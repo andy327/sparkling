@@ -521,4 +521,126 @@ final case class Frame(df: DataFrame) {
 
     Frame(resultDf)
   }
+
+  // ── Cleaning ────────────────────────────────────────────────────────────────
+
+  /** Replaces null values in the given columns with a `Double` fill value.
+    *
+    * @param fs columns to fill (must be non-empty)
+    * @param value replacement value for nulls
+    * @throws java.lang.IllegalArgumentException if `fs` is empty
+    */
+  def fillNulls(fs: Fields, value: Double): Frame = {
+    require(fs.nonEmpty, "fillNulls requires at least one field")
+    Frame(df.na.fill(value, fs.names))
+  }
+
+  /** Replaces null values in the given columns with a `Long` fill value.
+    *
+    * @param fs columns to fill (must be non-empty)
+    * @param value replacement value for nulls
+    * @throws java.lang.IllegalArgumentException if `fs` is empty
+    */
+  def fillNulls(fs: Fields, value: Long): Frame = {
+    require(fs.nonEmpty, "fillNulls requires at least one field")
+    Frame(df.na.fill(value, fs.names))
+  }
+
+  /** Replaces null values in the given columns with a `Boolean` fill value.
+    *
+    * @param fs columns to fill (must be non-empty)
+    * @param value replacement value for nulls
+    * @throws java.lang.IllegalArgumentException if `fs` is empty
+    */
+  def fillNulls(fs: Fields, value: Boolean): Frame = {
+    require(fs.nonEmpty, "fillNulls requires at least one field")
+    Frame(df.na.fill(value, fs.names))
+  }
+
+  /** Replaces null values in the given columns with a `String` fill value.
+    *
+    * @param fs columns to fill (must be non-empty)
+    * @param value replacement value for nulls
+    * @throws java.lang.IllegalArgumentException if `fs` is empty
+    */
+  def fillNulls(fs: Fields, value: String): Frame = {
+    require(fs.nonEmpty, "fillNulls requires at least one field")
+    Frame(df.na.fill(value, fs.names))
+  }
+
+  /** Replaces string values in the given columns according to a substitution map.
+    *
+    * @param fs columns to apply replacements to (must be non-empty)
+    * @param replacements map of existing string values to their replacements
+    * @throws java.lang.IllegalArgumentException if `fs` is empty
+    */
+  def replace(fs: Fields, replacements: Map[String, String]): Frame = {
+    require(fs.nonEmpty, "replace requires at least one field")
+    Frame(df.na.replace(fs.names, replacements))
+  }
+
+  /** Returns a Frame with duplicate rows removed across all columns. */
+  def distinct(): Frame = Frame(df.distinct())
+
+  /** Returns a Frame with rows deduplicated on the given columns.
+    *
+    * Equivalent to SQL `SELECT DISTINCT ON (cols)`. When multiple rows share the same values in `fs`, one is kept
+    * and the rest are dropped.
+    *
+    * @param fs columns to deduplicate on (must be non-empty)
+    */
+  def distinct(fs: Fields): Frame = Frame(df.dropDuplicates(fs.names))
+
+  /** Drops rows where any of the given columns is null.
+    *
+    * @param fs columns to check for nulls (must be non-empty)
+    * @throws java.lang.IllegalArgumentException if `fs` is empty
+    */
+  def dropNulls(fs: Fields): Frame = {
+    require(fs.nonEmpty, "dropNulls requires at least one field")
+    Frame(df.na.drop("any", fs.names))
+  }
+
+  /** Drops rows where all of the given columns are null.
+    *
+    * A row is dropped only if every column in `fs` is null. Rows with at least one non-null value in `fs` are kept.
+    *
+    * @param fs columns to check for nulls (must be non-empty)
+    * @throws java.lang.IllegalArgumentException if `fs` is empty
+    */
+  def dropAllNulls(fs: Fields): Frame = {
+    require(fs.nonEmpty, "dropAllNulls requires at least one field")
+    Frame(df.na.drop("all", fs.names))
+  }
+
+  /** Drops rows where any of the given columns is null. Alias for [[dropNulls]].
+    *
+    * @param fs columns to check for nulls (must be non-empty)
+    * @throws java.lang.IllegalArgumentException if `fs` is empty
+    */
+  def filterNotNull(fs: Fields): Frame = dropNulls(fs)
+
+  /** Filters rows by a Spark SQL column predicate.
+    *
+    * @param pred boolean column expression to filter by
+    */
+  def where(pred: Column): Frame = Frame(df.filter(pred))
+
+  /** Returns a random sample of rows.
+    *
+    * @param fraction fraction of rows to include; must be non-negative; must be in `[0.0, 1.0]` when sampling without
+    *   replacement; may exceed `1.0` when sampling with replacement (expected multiplier)
+    * @param withReplacement whether to sample with replacement (default false)
+    * @param seed optional random seed for reproducibility
+    * @throws java.lang.IllegalArgumentException if `fraction` is negative, or exceeds `1.0` without replacement
+    */
+  def sample(fraction: Double, withReplacement: Boolean = false, seed: Option[Long] = None): Frame = {
+    require(fraction >= 0.0, s"sample fraction must be non-negative (got $fraction)")
+    require(withReplacement || fraction <= 1.0, s"sample fraction must be in [0.0, 1.0] (got $fraction)")
+    val out = seed match {
+      case Some(s) => df.sample(withReplacement = withReplacement, fraction = fraction, seed = s)
+      case None    => df.sample(withReplacement = withReplacement, fraction = fraction)
+    }
+    Frame(out)
+  }
 }
