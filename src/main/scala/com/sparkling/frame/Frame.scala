@@ -1,12 +1,18 @@
 package com.sparkling.frame
 
 import scala.collection.immutable.ArraySeq
+import scala.reflect.runtime.universe.TypeTag
 
+import org.apache.spark.sql.api.java.UDF1
 import org.apache.spark.sql.types.{ArrayType, DataType, MapType, StructType}
-import org.apache.spark.sql.{functions => sqlf, Column, DataFrame, Encoder}
+import org.apache.spark.sql.{functions => sqlf, Column, DataFrame, Encoder, Row => SparkRow}
 import org.apache.spark.storage.StorageLevel
 
-import com.sparkling.schema.{Field, Fields}
+import com.sparkling.evidence.{ExplodeEvidence, SparkFunctionEvidence, SparkPredicateEvidence}
+import com.sparkling.row.SparkRowBridge
+import com.sparkling.row.convert.{RowDecoder, RowEncoder}
+import com.sparkling.schema.{Field, Fields, SparkSchema}
+import com.sparkling.syntax.UserDefinedFunctionSyntax._
 
 /** Fluent, DataFrame-first transformation API.
   *
@@ -841,6 +847,255 @@ final case class Frame(df: DataFrame) {
     val (in, out) = fs
     require(in.nonEmpty, "firstNonNull requires at least one input field")
     Frame(df.withColumn(out.name, sqlf.coalesce(in.names.map(sqlf.col): _*)))
+  }
+
+  // ── UDF transforms ─────────────────────────────────────────────────────────
+
+  /** Filters rows by applying a typed Scala predicate to one or more input columns.
+    *
+    * Rows for which the predicate evaluates to `true` are kept. For filtering with a Spark SQL expression, use
+    * [[where]].
+    *
+    * Example:
+    * {{{
+    * frame.filter(Fields("age")) { age: Int => age >= 18 }
+    * frame.filter(Fields("first", "last")) { (f: String, l: String) => f.nonEmpty && l.nonEmpty }
+    * }}}
+    *
+    * @param fs input columns passed to the predicate (must be non-empty)
+    * @param f Scala predicate function (`Function1`..`Function10`)
+    * @param deterministic set `false` if the predicate depends on randomness or external state
+    * @throws java.lang.IllegalArgumentException if `fs` is empty
+    */
+  def filter[F](fs: Fields)(f: F, deterministic: Boolean = true)(implicit
+      fev: SparkPredicateEvidence[F]
+  ): Frame = {
+    require(fs.nonEmpty, "filter requires at least one input field")
+    val udf = fev.udf(f).withDeterminism(deterministic)
+    Frame(df.filter(udf(fs.names.map(sqlf.col): _*)))
+  }
+
+  /** Applies a typed Scala function to one or more input columns, writing the result to one or more output columns.
+    *
+    * If the output arity is 1, the function may return any Spark-supported type. If the output arity is greater than 1,
+    * the function must return a tuple or case class (a Spark struct); the struct is expanded into the output columns by
+    * position.
+    *
+    * Example:
+    * {{{
+    * frame.map(Fields("x") -> Fields("y")) { x: Int => x * 2 }
+    * frame.map(Fields("a", "b") -> Fields("sum", "product")) { (a: Int, b: Int) => (a + b, a * b) }
+    * }}}
+    *
+    * @param fs mapping from input columns to output columns (both sides must be non-empty)
+    * @param f Scala function (`Function0`..`Function10`)
+    * @param deterministic set `false` if the function depends on randomness or external state
+    * @throws java.lang.IllegalArgumentException if input or output fields are empty
+    */
+  def map[F](fs: (Fields, Fields))(f: F, deterministic: Boolean = true)(implicit
+      fev: SparkFunctionEvidence[F]
+  ): Frame = {
+    val (in, out) = fs
+    require(in.nonEmpty, "map requires at least one input field")
+    require(out.nonEmpty, "map requires at least one output field")
+    val udf = fev.udf(f).withDeterminism(deterministic)
+    assignColumns(out, udf(in.names.map(sqlf.col): _*))
+  }
+
+  /** Applies a typed Scala function to one or more input columns, expanding the result into zero or more output rows.
+    *
+    * The function's return type must be explodable — i.e. a `Seq` subtype, `Array`, or `Option` — which is enforced by
+    * the implicit [[com.sparkling.evidence.ExplodeEvidence]] constraint. A `null` return is treated as empty.
+    *
+    * If the output arity is 1, the exploded element is written directly to the output field. If the output arity is
+    * greater than 1, the element must be a struct (e.g. a tuple or case class); it is expanded into output columns by
+    * position.
+    *
+    * @param fs mapping from input columns to output columns (both sides must be non-empty)
+    * @param f Scala function returning an explodable collection (`Function0`..`Function10`)
+    * @param deterministic set `false` if the function depends on randomness or external state
+    * @param outer if `true`, a `null` or empty result produces one output row with null values (`EXPLODE_OUTER`)
+    * @throws java.lang.IllegalArgumentException if input or output fields are empty
+    */
+  def flatMap[F, R, A: TypeTag](fs: (Fields, Fields))(
+      f: F,
+      deterministic: Boolean = true,
+      outer: Boolean = false
+  )(implicit fev: SparkFunctionEvidence.Aux[F, R], ee: ExplodeEvidence.Aux[R, A]): Frame = {
+    val (in, out) = fs
+    require(in.nonEmpty, "flatMap requires at least one input field")
+    require(out.nonEmpty, "flatMap requires at least one output field")
+
+    val udf = fev.udfExplode[A](f).withDeterminism(deterministic)
+    val arrExpr = udf(in.names.map(sqlf.col): _*)
+
+    val tmp = Field.tmp(prefix = "__flatMap_")
+    val explodeFn = if (outer) sqlf.explode_outer _ else sqlf.explode _
+    val exploded = Frame(df.withColumn(tmp.name, explodeFn(arrExpr)))
+    exploded.assignColumns(out, sqlf.col(tmp.name)).discard(Fields(tmp.name))
+  }
+
+  /** Applies a low-level `SparkRow => SparkRow` UDF over packed input columns.
+    *
+    * This is a building block for typed record transforms. The pipeline is:
+    *   1. Pack `in` fields into a temporary struct column.
+    *   2. Apply `f` (wrapped as a Java UDF to bypass Spark's null-safety checks on untyped Scala UDFs).
+    *   3. Unpack the result struct into the `out` fields, dropping temporary columns.
+    *
+    * The `outStructType` parameter must match the Spark schema of the struct returned by `f`. When working with
+    * [[com.sparkling.row.types.RecordSchema RecordSchema]], use
+    * [[com.sparkling.schema.SparkSchema.toStructType SparkSchema.toStructType]] to derive it.
+    *
+    * Prefer [[mapRecord]] when a [[com.sparkling.row.convert.RowDecoder RowDecoder]] /
+    * [[com.sparkling.row.convert.RowEncoder RowEncoder]] pair is available for the input/output types.
+    *
+    * @param fs mapping from input columns to output columns (both sides must be non-empty)
+    * @param outStructType Spark schema of the struct returned by `f`
+    * @param deterministic set `false` if `f` depends on randomness or external state
+    * @param f transformation from packed input struct row to output struct row
+    * @throws java.lang.IllegalArgumentException if input or output fields are empty
+    */
+  def mapStruct(fs: (Fields, Fields), outStructType: StructType, deterministic: Boolean = true)(
+      f: SparkRow => SparkRow
+  ): Frame = {
+    val (in, out) = fs
+    require(in.nonEmpty, "mapStruct requires at least one input field")
+    require(out.nonEmpty, "mapStruct requires at least one output field")
+
+    val tmpIn = Field.tmp(prefix = "__mapStruct_in_")
+    val tmpOut = Field.tmp(prefix = "__mapStruct_out_")
+
+    val javaUdf = new UDF1[SparkRow, SparkRow] { override def call(r: SparkRow): SparkRow = f(r) }
+    val udf = sqlf.udf(javaUdf, outStructType).withDeterminism(deterministic)
+
+    val packed = pack(in -> tmpIn)
+    val withOut = Frame(packed.df.withColumn(tmpOut.name, udf(sqlf.col(tmpIn.name))).drop(tmpIn.name))
+    withOut.unpack(tmpOut -> out)
+  }
+
+  /** Applies a low-level `SparkRow => java.util.List[SparkRow]` UDF over packed input columns, expanding into rows.
+    *
+    * This is a building block for typed row-expanding record transforms. The pipeline is:
+    *   1. Pack `in` fields into a temporary struct column.
+    *   2. Apply `f`, returning a list of output struct rows (or `null` for outer-explode semantics).
+    *   3. Explode the result array into rows.
+    *   4. Unpack each struct element into the `out` fields, dropping temporary columns.
+    *
+    * Prefer [[flatMapRecord]] when a [[com.sparkling.row.convert.RowDecoder RowDecoder]] /
+    * [[com.sparkling.row.convert.RowEncoder RowEncoder]] pair is available for the input/output types.
+    *
+    * @param fs mapping from input columns to output columns (both sides must be non-empty)
+    * @param outStructType Spark schema for the element struct in the returned array
+    * @param deterministic set `false` if `f` depends on randomness or external state
+    * @param outer if `true`, a `null` return from `f` produces one output row with null values
+    * @param f transformation from packed input struct row to a list of output struct rows
+    * @throws java.lang.IllegalArgumentException if input or output fields are empty
+    */
+  def mapArrayStruct(
+      fs: (Fields, Fields),
+      outStructType: StructType,
+      deterministic: Boolean = true,
+      outer: Boolean = false
+  )(f: SparkRow => java.util.List[SparkRow]): Frame = {
+    val (in, out) = fs
+    require(in.nonEmpty, "mapArrayStruct requires at least one input field")
+    require(out.nonEmpty, "mapArrayStruct requires at least one output field")
+
+    val tmpIn = Field.tmp(prefix = "__mapArrayStruct_in_")
+    val tmpArr = Field.tmp(prefix = "__mapArrayStruct_arr_")
+    val tmpElem = Field.tmp(prefix = "__mapArrayStruct_elem_")
+    val arrayType = ArrayType(outStructType, containsNull = true)
+
+    val javaUdf = new UDF1[SparkRow, java.util.List[SparkRow]] {
+      override def call(r: SparkRow): java.util.List[SparkRow] = f(r)
+    }
+    val udf = sqlf.udf(javaUdf, arrayType).withDeterminism(deterministic)
+    val explodeFn = if (outer) sqlf.explode_outer _ else sqlf.explode _
+
+    val packed = pack(in -> tmpIn)
+    val withArr = Frame(packed.df.withColumn(tmpArr.name, udf(sqlf.col(tmpIn.name))).drop(tmpIn.name))
+    val exploded = Frame(withArr.df.withColumn(tmpElem.name, explodeFn(sqlf.col(tmpArr.name))).drop(tmpArr.name))
+    exploded.unpack(tmpElem -> out)
+  }
+
+  /** Applies a typed `A => B` transform over selected input columns, writing results to output columns.
+    *
+    * Input columns are packed into a temporary struct, decoded into `A` via
+    * [[com.sparkling.row.convert.RowDecoder RowDecoder]], the function `f` is applied, and the result is encoded via
+    * [[com.sparkling.row.convert.RowEncoder RowEncoder]] and unpacked into the output columns.
+    *
+    * This is the converter-based alternative to [[map]]: prefer it when working with typed record objects; prefer
+    * [[map]] for simple per-column positional UDFs.
+    *
+    * @param fs mapping from input columns to output columns (both sides must be non-empty)
+    * @param deterministic set `false` if `f` depends on randomness or external state
+    * @param f typed transformation from `A` to `B`
+    * @throws java.lang.IllegalArgumentException if input or output fields are empty
+    */
+  def mapRecord[A, B](fs: (Fields, Fields), deterministic: Boolean = true)(f: A => B)(implicit
+      dec: RowDecoder[A],
+      enc: RowEncoder[B]
+  ): Frame = {
+    val (in, out) = fs
+    require(in.nonEmpty, "mapRecord requires at least one input field")
+    require(out.nonEmpty, "mapRecord requires at least one output field")
+
+    val inStructType = StructType(in.names.iterator.map(n => schema(schema.fieldIndex(n))).toArray)
+    val alignedDec = dec.alignTo(in)
+    val alignedEnc = enc.alignTo(out)
+    val outStructType = SparkSchema.toStructType(alignedEnc.schema)
+
+    mapStruct(in -> out, outStructType, deterministic) { row =>
+      val baseIn = SparkRowBridge.fromSparkRow(row, inStructType)
+      val b = f(alignedDec.from(baseIn))
+      SparkRowBridge.toSparkRow(alignedEnc.to(b), alignedEnc.schema)
+    }
+  }
+
+  /** Applies a typed `A => IterableOnce[B]` transform over selected input columns, expanding into zero or more rows.
+    *
+    * Input columns are packed and decoded into `A` via [[com.sparkling.row.convert.RowDecoder RowDecoder]], `f` is
+    * applied, and each `B` result is encoded via [[com.sparkling.row.convert.RowEncoder RowEncoder]] and unpacked into
+    * the output columns.
+    *
+    * Null / empty semantics:
+    *   - `null` return from `f`: treated as null (one null row if `outer = true`, zero rows otherwise)
+    *   - empty iterator: zero output rows (one null row if `outer = true`)
+    *
+    * @param fs mapping from input columns to output columns (both sides must be non-empty)
+    * @param deterministic set `false` if `f` depends on randomness or external state
+    * @param outer if `true`, a `null` or empty result produces one output row with null values
+    * @param f typed row-expanding transformation from `A` to zero or more `B`
+    * @throws java.lang.IllegalArgumentException if input or output fields are empty
+    */
+  def flatMapRecord[A, B](
+      fs: (Fields, Fields),
+      deterministic: Boolean = true,
+      outer: Boolean = false
+  )(f: A => IterableOnce[B])(implicit dec: RowDecoder[A], enc: RowEncoder[B]): Frame = {
+    val (in, out) = fs
+    require(in.nonEmpty, "flatMapRecord requires at least one input field")
+    require(out.nonEmpty, "flatMapRecord requires at least one output field")
+
+    val inStructType = StructType(in.names.iterator.map(n => schema(schema.fieldIndex(n))).toArray)
+    val alignedDec = dec.alignTo(in)
+    val alignedEnc = enc.alignTo(out)
+    val outStructType = SparkSchema.toStructType(alignedEnc.schema)
+
+    mapArrayStruct(in -> out, outStructType, deterministic, outer) { row =>
+      val baseIn = SparkRowBridge.fromSparkRow(row, inStructType)
+      val result = f(alignedDec.from(baseIn))
+      if (result == null) null
+      else {
+        val it = result.iterator
+        if (!it.hasNext) java.util.Collections.emptyList()
+        else {
+          val out = new java.util.ArrayList[SparkRow]()
+          while (it.hasNext) out.add(SparkRowBridge.toSparkRow(alignedEnc.to(it.next()), alignedEnc.schema))
+          out
+        }
+      }
+    }
   }
 
   // ── Relational ─────────────────────────────────────────────────────────────
