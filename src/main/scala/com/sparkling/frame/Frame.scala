@@ -902,6 +902,40 @@ final case class Frame(df: DataFrame) {
     * @param other Frame to union with
     */
   def ++(other: Frame): Frame = Frame.merge(Seq(this, other))
+
+  // ── Grouped ─────────────────────────────────────────────────────────────────
+
+  /** Groups by the given key columns, applies aggregations defined by `f`, and returns the aggregated Frame.
+    *
+    * Example:
+    * {{{
+    * frame.groupBy(Fields("dept")) {
+    *   _.count(Field("n"))
+    *    .avg(Fields("salary") -> Field("avg_salary"))
+    * }
+    * }}}
+    *
+    * @param keys grouping key columns (must be non-empty)
+    * @param f function that builds aggregations on a [[GroupedFrame]]
+    * @throws java.lang.IllegalArgumentException if `keys` is empty or no aggregations are added
+    */
+  def groupBy(keys: Fields)(f: GroupedFrame => GroupedFrame): Frame = {
+    require(keys.nonEmpty, "groupBy requires at least one key field")
+    val gf = GroupedFrame(this, keys, Vector.empty, Vector.empty, None)
+    f(gf).run()
+  }
+
+  /** Aggregates all rows into a single row, applying aggregations defined by `f`.
+    *
+    * Equivalent to a SQL `SELECT agg(...) FROM table` with no `GROUP BY` clause.
+    *
+    * @param f function that builds aggregations on a [[GroupedFrame]]
+    * @throws java.lang.IllegalArgumentException if no aggregations are added
+    */
+  def groupAll(f: GroupedFrame => GroupedFrame): Frame = {
+    val gf = GroupedFrame(this, Fields.empty, Vector.empty, Vector.empty, None)
+    f(gf).run()
+  }
 }
 
 object Frame {
