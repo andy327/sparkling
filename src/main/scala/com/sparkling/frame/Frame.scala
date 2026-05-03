@@ -1158,7 +1158,7 @@ final case class Frame(df: DataFrame) {
     */
   def ++(other: Frame): Frame = Frame.merge(Seq(this, other))
 
-  // ── Grouped ─────────────────────────────────────────────────────────────────
+  // ── Grouped ────────────────────────────────────────────────────────────────
 
   /** Groups by the given key columns, applies aggregations defined by `f`, and returns the aggregated Frame.
     *

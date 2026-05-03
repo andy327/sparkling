@@ -68,6 +68,16 @@ final class FrameGroupedSpec extends AnyWordSpec with SparkSuite {
     }
   }
 
+  "GroupedFrame unary aggregation" should {
+    "throw when input has more than one field" in {
+      val df = Seq(("a", 1.0, 2.0)).toDF("k", "v1", "v2")
+      val ex = intercept[IllegalArgumentException] {
+        df.frame.groupBy(Fields("k"))(_.avg(Fields("v1", "v2") -> Field("mean")))
+      }
+      ex.getMessage should include("requires exactly one input field")
+    }
+  }
+
   "GroupedFrame.avg" should {
     "compute mean per group" in {
       val df = Seq(("a", 10.0), ("a", 20.0), ("b", 5.0)).toDF("k", "v")
@@ -184,6 +194,14 @@ final class FrameGroupedSpec extends AnyWordSpec with SparkSuite {
   }
 
   "GroupedFrame.approxCountDistinct" should {
+    "throw when input has more than one field" in {
+      val df = Seq(("a", 1, 2)).toDF("k", "v1", "v2")
+      val ex = intercept[IllegalArgumentException] {
+        df.frame.groupBy(Fields("k"))(_.approxCountDistinct(Fields("v1", "v2") -> Field("n")))
+      }
+      ex.getMessage should include("approxCountDistinct requires exactly one input field")
+    }
+
     "approximate distinct count" in {
       val df = spark.range(0, 1000).toDF("x").withColumn("k", col("x") % 2)
       val out = df.frame
@@ -196,6 +214,14 @@ final class FrameGroupedSpec extends AnyWordSpec with SparkSuite {
   }
 
   "GroupedFrame.approxPercentile" should {
+    "throw when input has more than one field" in {
+      val df = Seq(("a", 1.0, 2.0)).toDF("k", "v1", "v2")
+      val ex = intercept[IllegalArgumentException] {
+        df.frame.groupBy(Fields("k"))(_.approxPercentile(Fields("v1", "v2") -> Field("p"), Seq(0.5)))
+      }
+      ex.getMessage should include("approxPercentile requires exactly one input field")
+    }
+
     "compute a single percentile" in {
       val df = (1 to 100).map(i => ("a", i.toDouble)).toDF("k", "v")
       val out = df.frame
@@ -225,6 +251,14 @@ final class FrameGroupedSpec extends AnyWordSpec with SparkSuite {
   }
 
   "GroupedFrame.first" should {
+    "throw when input has more than one field" in {
+      val df = Seq(("a", 1, 2)).toDF("k", "v1", "v2")
+      val ex = intercept[IllegalArgumentException] {
+        df.frame.groupBy(Fields("k"))(_.first(Fields("v1", "v2") -> Field("fv")))
+      }
+      ex.getMessage should include("first requires exactly one input field")
+    }
+
     // Spark's first() is non-deterministic within a partition, so we only assert group count.
     "return the first value per group" in {
       val df = Seq(("a", 1), ("a", 2), ("b", 3)).toDF("k", "v")
@@ -259,6 +293,14 @@ final class FrameGroupedSpec extends AnyWordSpec with SparkSuite {
   }
 
   "GroupedFrame.last" should {
+    "throw when input has more than one field" in {
+      val df = Seq(("a", 1, 2)).toDF("k", "v1", "v2")
+      val ex = intercept[IllegalArgumentException] {
+        df.frame.groupBy(Fields("k"))(_.last(Fields("v1", "v2") -> Field("lv")))
+      }
+      ex.getMessage should include("last requires exactly one input field")
+    }
+
     // Spark's last() is non-deterministic within a partition, so we only assert group count.
     "return the last value per group" in {
       val df = Seq(("a", 1), ("a", 2), ("b", 3)).toDF("k", "v")
