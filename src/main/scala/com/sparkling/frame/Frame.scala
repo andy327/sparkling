@@ -1191,6 +1191,46 @@ final case class Frame(df: DataFrame) {
     val gf = GroupedFrame(this, Fields.empty, Vector.empty, Vector.empty, None)
     f(gf).run()
   }
+
+  // ── Streaming ──────────────────────────────────────────────────────────────
+
+  /** Groups by the given key columns and applies a streaming operation defined by `f`.
+    *
+    * Streaming operations process each group as an iterator of typed input values and may emit zero or more output rows
+    * per group. The final output schema is `keys ++ op.out`.
+    *
+    * Example:
+    * {{{
+    * frame.streamBy(Fields("dept")) {
+    *   _.sortBy(Fields("salary"))
+    *    .mapGroups(Fields("salary") -> Fields("max_salary")) { it: Iterator[Int] =>
+    *      Iterator(it.max)
+    *    }
+    * }
+    * }}}
+    *
+    * @param keys grouping key columns (must be non-empty)
+    * @param f function that configures a [[GroupedStream]] plan
+    * @throws java.lang.IllegalArgumentException if `keys` is empty or no stream operation is defined
+    */
+  def streamBy(keys: Fields)(f: GroupedStream => GroupedStream): Frame = {
+    require(keys.nonEmpty, "streamBy requires at least one key field")
+    val gs = GroupedStream(this, keys, None, None)
+    f(gs).run()
+  }
+
+  /** Treats all rows as a single group and applies a streaming operation defined by `f`.
+    *
+    * Equivalent to `streamBy` with no grouping keys. The final output schema is `op.out` only (no key columns
+    * prepended).
+    *
+    * @param f function that configures a [[GroupedStream]] plan
+    * @throws java.lang.IllegalArgumentException if no stream operation is defined
+    */
+  def streamAll(f: GroupedStream => GroupedStream): Frame = {
+    val gs = GroupedStream(this, Fields.empty, None, None)
+    f(gs).run()
+  }
 }
 
 object Frame {
