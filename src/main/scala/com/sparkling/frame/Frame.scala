@@ -1232,6 +1232,53 @@ final case class Frame(df: DataFrame) {
     val gs = GroupedStream(this, Fields.empty, None, None)
     f(gs).run()
   }
+
+  // ── Windowed ───────────────────────────────────────────────────────────────
+
+  /** Partitions by the given key columns and applies window functions defined by `f`.
+    *
+    * Window operations add new columns to the Frame without reducing rows. The output schema is the existing schema
+    * plus one column per window operation.
+    *
+    * Example:
+    * {{{
+    * frame.windowBy("dept") {
+    *   _.orderBy("salary")
+    *    .rank("dept_rank")
+    *    .lag("salary" -> "prev_salary", offset = 1)
+    *    .sum("salary" -> "running_total")
+    * }
+    * }}}
+    *
+    * @param keys partition-by columns (must be non-empty)
+    * @param f function that configures a [[WindowedFrame]] plan
+    * @throws java.lang.IllegalArgumentException if `keys` is empty or no window operation is defined
+    */
+  def windowBy(keys: Fields)(f: WindowedFrame => WindowedFrame): Frame = {
+    require(keys.nonEmpty, "windowBy requires at least one key field")
+    val wf = WindowedFrame(this, keys, None, Vector.empty)
+    f(wf).run()
+  }
+
+  /** Applies window functions over all rows as a single partition, defined by `f`.
+    *
+    * Output columns are added to the existing Frame. Use [[windowBy]] when partitioning is needed.
+    *
+    * Example:
+    * {{{
+    * frame.windowAll {
+    *   _.orderBy("score")
+    *    .rowNumber("global_rank")
+    * }
+    * }}}
+    *
+    * @param f function that configures a [[WindowedFrame]] plan
+    * @throws java.lang.IllegalArgumentException if no window operation is defined
+    */
+  def windowAll(f: WindowedFrame => WindowedFrame): Frame = {
+    val wf = WindowedFrame(this, Fields.empty, None, Vector.empty)
+    f(wf).run()
+  }
 }
 
 object Frame {
