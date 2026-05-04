@@ -52,9 +52,9 @@ object PlannedAgg {
   *
   * Example:
   * {{{
-  * frame.groupBy(Fields("dept")) {
-  *   _.count(Field("n"))
-  *    .avg(Fields("salary") -> Field("avg_salary"))
+  * frame.groupBy("dept") {
+  *   _.count("n")
+  *    .avg("salary" -> "avg_salary")
   * }
   * }}}
   *
@@ -280,8 +280,8 @@ final case class GroupedFrame(
   /** Entry point for typed single-output aggregations.
     *
     * {{{
-    * _.aggregate(Fields("v") -> Fields("v_sum"))(sqlf.sum(sqlf.col("v")))
-    * _.aggregate(Fields("v") -> Fields("v_sum"))(myMonoidAggregator)
+    * _.aggregate("v" -> "v_sum")(sqlf.sum(sqlf.col("v")))
+    * _.aggregate("v" -> "v_sum")(myMonoidAggregator)
     * }}}
     *
     * Output must be arity 1. Use [[aggregatePacked]] for multi-column outputs.
@@ -292,11 +292,11 @@ final case class GroupedFrame(
 
   /** Entry point for packed (multi-output) typed aggregations.
     *
-    * The aggregator result is computed into a temporary struct column, then unpacked into the provided output fields via
-    * `Frame.unpack`.
+    * The aggregator result is computed into a temporary struct column, then unpacked into the provided output fields
+    * via `Frame.unpack`.
     *
     * {{{
-    * _.aggregatePacked(Fields("v") -> Fields("v_sum", "v_max"))(mySqlAggregator)
+    * _.aggregatePacked("v" -> ("v_sum", "v_max"))(mySqlAggregator)
     * }}}
     *
     * @param fs input → output field mapping
@@ -416,8 +416,8 @@ final case class GroupedFrame(
     /** Aggregates using an Algebird `MonoidAggregator[A, B, C]`.
       *
       * If the buffer `B` is SQL-encodable, uses the typed `Aggregator` path. If `B` is Kryo-only (e.g.
-      * `Option[SpaceSaver[T]]`), falls back to [[com.sparkling.algebird.MonoidAggregatorUdaf]] with binary buffer serialization; in
-      * that case the input must be a single field.
+      * `Option[SpaceSaver[T]]`), falls back to [[com.sparkling.algebird.MonoidAggregatorUdaf]] with binary buffer
+      * serialization; in that case the input must be a single field.
       */
     def apply[A: TypeTag: ClassTag, B, C: TypeTag: ClassTag](
         alg: MonoidAggregator[A, B, C]

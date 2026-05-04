@@ -19,7 +19,7 @@ import com.sparkling.evidence.EncoderEvidence
   *      [[MonoidAggregatorUdaf]] whose Spark buffer type is `Array[Byte]`. This allows non-encodable Algebird
   *      buffers (sketches, mutable structures) to be shuffled safely, without using any Catalyst internals.
   */
-object AlgebirdAggregatorSyntax {
+trait AlgebirdAggregatorSyntax {
 
   /** Wraps an Algebird `Monoid` as a Spark typed `Aggregator[A, B, B]`.
     *
@@ -53,7 +53,8 @@ object AlgebirdAggregatorSyntax {
 
   /** Builds a Spark SQL aggregate `Column` for a `MonoidAggregator` using binary buffer serialization.
     *
-    * The Algebird buffer `B` does not need a Spark `Encoder` — it is serialized to `Array[Byte]` via [[BufferSerDe]].
+    * The Algebird buffer `B` does not need a Spark `Encoder` — it is serialized to `Array[Byte]` via
+    * [[com.sparkling.algebird.BufferSerDe]].
     * Only the output type `C` requires an `Encoder`.
     *
     * @param inputColName name of the single input column to aggregate
@@ -70,3 +71,5 @@ object AlgebirdAggregatorSyntax {
     sqlf.udaf(udaf).apply(sqlf.col(inputColName))
   }
 }
+
+object AlgebirdAggregatorSyntax extends AlgebirdAggregatorSyntax

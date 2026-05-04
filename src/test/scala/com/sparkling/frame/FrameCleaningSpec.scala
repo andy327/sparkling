@@ -4,9 +4,8 @@ import org.apache.spark.sql.{functions => sqlf, Row}
 import org.scalatest.matchers.should.Matchers._
 import org.scalatest.wordspec.AnyWordSpec
 
+import com.sparkling.dsl._
 import com.sparkling.schema.Fields
-import com.sparkling.syntax.FieldsSyntax._
-import com.sparkling.syntax.FrameSyntax._
 import com.sparkling.testkit.SparkSuite
 
 final class FrameCleaningSpec extends AnyWordSpec with SparkSuite {

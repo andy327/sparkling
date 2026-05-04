@@ -858,8 +858,8 @@ final case class Frame(df: DataFrame) {
     *
     * Example:
     * {{{
-    * frame.filter(Fields("age")) { age: Int => age >= 18 }
-    * frame.filter(Fields("first", "last")) { (f: String, l: String) => f.nonEmpty && l.nonEmpty }
+    * frame.filter("age") { age: Int => age >= 18 }
+    * frame.filter(("first", "last")) { (f: String, l: String) => f.nonEmpty && l.nonEmpty }
     * }}}
     *
     * @param fs input columns passed to the predicate (must be non-empty)
@@ -883,8 +883,8 @@ final case class Frame(df: DataFrame) {
     *
     * Example:
     * {{{
-    * frame.map(Fields("x") -> Fields("y")) { x: Int => x * 2 }
-    * frame.map(Fields("a", "b") -> Fields("sum", "product")) { (a: Int, b: Int) => (a + b, a * b) }
+    * frame.map("x" -> "y") { x: Int => x * 2 }
+    * frame.map(("a", "b") -> ("sum", "product")) { (a: Int, b: Int) => (a + b, a * b) }
     * }}}
     *
     * @param fs mapping from input columns to output columns (both sides must be non-empty)
@@ -1164,9 +1164,9 @@ final case class Frame(df: DataFrame) {
     *
     * Example:
     * {{{
-    * frame.groupBy(Fields("dept")) {
-    *   _.count(Field("n"))
-    *    .avg(Fields("salary") -> Field("avg_salary"))
+    * frame.groupBy("dept") {
+    *   _.count("n")
+    *    .avg("salary" -> "avg_salary")
     * }
     * }}}
     *
@@ -1197,13 +1197,14 @@ final case class Frame(df: DataFrame) {
   /** Groups by the given key columns and applies a streaming operation defined by `f`.
     *
     * Streaming operations process each group as an iterator of typed input values and may emit zero or more output rows
-    * per group. The final output schema is `keys ++ op.out`.
+    * per group. The final output schema is `keys ++ out`, where `out` is the output fields passed to `mapGroups`
+    * or `mapStreamWithContext`.
     *
     * Example:
     * {{{
-    * frame.streamBy(Fields("dept")) {
-    *   _.sortBy(Fields("salary"))
-    *    .mapGroups(Fields("salary") -> Fields("max_salary")) { it: Iterator[Int] =>
+    * frame.streamBy("dept") {
+    *   _.sortBy("salary")
+    *    .mapGroups("salary" -> "max_salary") { it: Iterator[Int] =>
     *      Iterator(it.max)
     *    }
     * }
@@ -1221,8 +1222,8 @@ final case class Frame(df: DataFrame) {
 
   /** Treats all rows as a single group and applies a streaming operation defined by `f`.
     *
-    * Equivalent to `streamBy` with no grouping keys. The final output schema is `op.out` only (no key columns
-    * prepended).
+    * Equivalent to `streamBy` with no grouping keys. The output schema is the output fields of the stream
+    * operation only (no key columns prepended).
     *
     * @param f function that configures a [[GroupedStream]] plan
     * @throws java.lang.IllegalArgumentException if no stream operation is defined

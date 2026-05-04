@@ -5,9 +5,8 @@ import org.apache.spark.storage.StorageLevel
 import org.scalatest.matchers.should.Matchers._
 import org.scalatest.wordspec.AnyWordSpec
 
+import com.sparkling.dsl._
 import com.sparkling.schema.{Field, Fields}
-import com.sparkling.syntax.FieldsSyntax._
-import com.sparkling.syntax.FrameSyntax._
 import com.sparkling.testkit.SparkSuite
 
 final class FrameSpec extends AnyWordSpec with SparkSuite {

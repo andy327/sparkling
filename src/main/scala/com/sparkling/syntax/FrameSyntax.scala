@@ -9,11 +9,18 @@ import com.sparkling.frame.Frame
   * Adds the `.frame` method to `DataFrame`, returning a [[com.sparkling.frame.Frame]] wrapper that provides the
   * fluent, field-oriented transformation API.
   *
-  * Usage:
+  * Example — filter, group, aggregate, and sort in a single pipeline:
   * {{{
-  * import com.sparkling.syntax.FrameSyntax._
+  * import com.sparkling.dsl._
   *
-  * val out = df.frame.repartition(4).orderBy("id").df
+  * val result = df.frame
+  *   .filter("score") { score: Int => score > 0 }
+  *   .groupBy("dept") {
+  *     _.avg("salary" -> "avg_salary")
+  *      .count("headcount")
+  *   }
+  *   .orderBy("dept")
+  *   .df
   * }}}
   */
 trait FrameSyntax {

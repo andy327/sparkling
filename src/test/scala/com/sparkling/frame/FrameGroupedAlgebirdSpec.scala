@@ -8,9 +8,8 @@ import org.scalatest.wordspec.AnyWordSpec
 
 import com.sparkling.algebird.BufferSerDe._
 import com.sparkling.algebird.{Aggregators, AlgebirdAggregatorSyntax}
+import com.sparkling.dsl._
 import com.sparkling.schema.{Field, Fields}
-import com.sparkling.syntax.FieldsSyntax._
-import com.sparkling.syntax.FrameSyntax._
 import com.sparkling.testkit.SparkSuite
 
 object FrameGroupedAlgebirdSpec {

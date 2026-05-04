@@ -4,8 +4,8 @@ import org.apache.spark.sql.Row
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 
+import com.sparkling.dsl._
 import com.sparkling.schema.Fields
-import com.sparkling.syntax.FrameSyntax._
 import com.sparkling.testkit.SparkSuite
 
 final class FrameStreamSpec extends AnyWordSpec with Matchers with SparkSuite {
