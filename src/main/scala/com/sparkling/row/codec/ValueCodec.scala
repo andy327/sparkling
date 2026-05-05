@@ -3,12 +3,12 @@ package com.sparkling.row.codec
 import scala.reflect.ClassTag
 
 import com.sparkling.row.Row
-import com.sparkling.row.types.{RecordSchema, ValueType}
+import com.sparkling.row.schema.{RecordSchema, ValueType}
 
 /** Typeclass describing how to encode and decode a single cell value `A` to/from a runtime representation.
   *
   * `ValueCodec` is the single source of truth for cell-level codec behaviour. It provides:
-  *   - a runtime [[com.sparkling.row.types.ValueType]] tag for `A`
+  *   - a runtime [[com.sparkling.row.schema.ValueType]] tag for `A`
   *   - a [[nullable]] flag indicating whether this cell may legally hold `null`
   *   - [[encode]]: `A => Any` for writing values into rows (hot-path safe, no allocation)
   *   - [[decodeUnsafe]]: `Any => A` for reading values on the hot path (throws on failure, no `Either` allocation)
@@ -285,7 +285,7 @@ object ValueCodec {
 
   /** Produces a `ValueCodec[Row]` for object-typed (nested struct) cells.
     *
-    * Not provided implicitly because it requires a runtime [[com.sparkling.row.types.RecordSchema]].
+    * Not provided implicitly because it requires a runtime [[com.sparkling.row.schema.RecordSchema]].
     */
   def forRow(schema: RecordSchema): ValueCodec[Row] =
     new ValueCodec[Row] {

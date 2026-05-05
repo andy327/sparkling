@@ -7,42 +7,12 @@ import scala.reflect.runtime.universe.TypeTag
 import com.twitter.algebird.MonoidAggregator
 import org.apache.spark.sql.expressions.{Aggregator => SqlAggregator}
 import org.apache.spark.sql.types.StructType
-import org.apache.spark.sql.{functions => sqlf, Column, DataFrame, Encoder, Encoders}
+import org.apache.spark.sql.{functions => sqlf, Column, Encoder, Encoders}
 
 import com.sparkling.algebird.AlgebirdAggregatorSyntax._
 import com.sparkling.algebird.BufferSerDe
 import com.sparkling.evidence.{EncoderEvidence, EncodingStrategy}
 import com.sparkling.schema.{Field, Fields}
-
-/** A planned aggregation: an output column name paired with its Spark SQL aggregation expression. */
-sealed trait PlannedAgg {
-  def outName: String
-  def expr: Column
-}
-
-object PlannedAgg {
-
-  /** A single-output aggregation that writes one expression into one output column.
-    *
-    * @param outName name of the output column
-    * @param expr Spark SQL aggregation expression
-    */
-  final case class Direct(outName: String, expr: Column) extends PlannedAgg
-
-  /** A multi-output aggregation.
-    *
-    * The expression is computed into a temporary column `tmp` (typically a struct), then unpacked into the provided
-    * output fields via `Frame.unpack`. The temporary column is dropped after unpacking.
-    *
-    * @param tmp temporary column used for the packed result
-    * @param out output fields to unpack into
-    * @param expr Spark aggregate expression producing a struct-like value
-    */
-  final case class Packed(tmp: Field, out: Fields, expr: Column) extends PlannedAgg {
-    override def outName: String = tmp.name
-    def unpack(df: DataFrame): DataFrame = Frame(df).unpack(tmp -> out).df
-  }
-}
 
 /** Builder for grouped aggregations over a [[Frame]].
   *
@@ -203,6 +173,8 @@ final case class GroupedFrame(
 
   /** Returns the first value of the input column within each group, writing the result to `out`.
     *
+    * @note Result is non-deterministic unless the group has a stable sort order (e.g. via a prior `sortBy` or
+    *   `sortWithinPartitions`). Use [[minBy]] for a deterministic first-by-key alternative.
     * @param fs mapping from a single input column to the output column
     * @param ignoreNulls if true, skips null values (default false)
     */
@@ -214,6 +186,8 @@ final case class GroupedFrame(
 
   /** Returns the last value of the input column within each group, writing the result to `out`.
     *
+    * @note Result is non-deterministic unless the group has a stable sort order. Use [[maxBy]] for a deterministic
+    *   last-by-key alternative.
     * @param fs mapping from a single input column to the output column
     * @param ignoreNulls if true, skips null values (default false)
     */

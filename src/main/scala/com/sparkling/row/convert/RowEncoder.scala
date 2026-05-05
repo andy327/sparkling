@@ -2,7 +2,7 @@ package com.sparkling.row.convert
 
 import com.sparkling.row.Row
 import com.sparkling.row.codec.ValueCodec
-import com.sparkling.row.types.{RecordSchema, ValueType}
+import com.sparkling.row.schema.{RecordSchema, ValueType}
 import com.sparkling.schema.Fields
 
 /** Typeclass for encoding a value of type `T` as a [[Row]].

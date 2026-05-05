@@ -1,4 +1,4 @@
-package com.sparkling.row.types
+package com.sparkling.row.schema
 
 /** An ordered sequence of [[SchemaField]]s describing the typed structure of a [[com.sparkling.row.Row]].
   *

@@ -3,7 +3,7 @@ package com.sparkling.row.codec
 import org.scalatest.matchers.should.Matchers._
 import org.scalatest.wordspec.AnyWordSpec
 
-import com.sparkling.row.types.ValueType._
+import com.sparkling.row.schema.ValueType._
 
 final class ValueCodecSpec extends AnyWordSpec {
 
@@ -299,8 +299,8 @@ final class ValueCodecSpec extends AnyWordSpec {
 
     "support forRow: valueType, nullable, encode, and decodeUnsafe" in {
       import com.sparkling.row.Row
-      import com.sparkling.row.types.{RecordSchema, SchemaField}
-      import com.sparkling.row.types.ValueType.ObjectType
+      import com.sparkling.row.schema.{RecordSchema, SchemaField}
+      import com.sparkling.row.schema.ValueType.ObjectType
       import com.sparkling.schema.Fields
 
       val schema = RecordSchema(

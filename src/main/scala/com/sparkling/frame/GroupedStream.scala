@@ -37,13 +37,15 @@ final case class GroupedStream private[frame] (
     copy(maybeSort = Some((fields, false)))
   }
 
-  /** Reverses the sort order set by [[sortBy]] (descending instead of ascending).
+  /** Toggles the sort direction set by [[sortBy]]: ascending becomes descending and vice versa.
+    *
+    * Calling `reverse` twice cancels out. Must be called after [[sortBy]].
     *
     * @throws java.lang.IllegalArgumentException if [[sortBy]] has not been called yet
     */
   def reverse: GroupedStream = {
     require(maybeSort.isDefined, "reverse: first set fields to sort on (sortBy)")
-    copy(maybeSort = maybeSort.map { case (fs, _) => (fs, true) })
+    copy(maybeSort = maybeSort.map { case (fs, desc) => (fs, !desc) })
   }
 
   /** Defines a context-free stream operation that maps an input iterator to an output iterator.

@@ -4,12 +4,12 @@ import shapeless._
 import shapeless.labelled.{field, FieldType}
 
 import com.sparkling.row.Row
-import com.sparkling.row.types.ValueType.ObjectType
-import com.sparkling.row.types.{RecordSchema, SchemaField}
+import com.sparkling.row.schema.ValueType.ObjectType
+import com.sparkling.row.schema.{RecordSchema, SchemaField}
 import com.sparkling.schema.Fields
 
 /** Typeclass describing how to encode/decode a Scala value `A` as a [[Row]] plus a runtime
-  * [[com.sparkling.row.types.RecordSchema]].
+  * [[com.sparkling.row.schema.RecordSchema]].
   *
   * `ValueCodec` handles cell-level typing, coercion, and encode/decode. `RecordCodec` adds structured, schema-aware
   * record encoding on top.

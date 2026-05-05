@@ -13,8 +13,8 @@ import org.apache.spark.sql.expressions.{Window => SparkWindow}
   * import com.sparkling.frame.WindowBounds
   * import com.sparkling.frame.WindowBounds._
   *
-  * rowsBetween(unboundedPreceding, currentRow)       // running total (the default)
-  * rowsBetween(-6, 0)                                // 7-row rolling window
+  * rowsBetween(unboundedPreceding, currentRow)          // running total (the default)
+  * rowsBetween(-6, 0)                                   // 7-row rolling window
   * rangeBetween(unboundedPreceding, unboundedFollowing) // whole partition
   * }}}
   */

@@ -42,6 +42,11 @@ final class RowIOSpec extends AnyWordSpec {
       implicitly[FieldPresence[Long]].isPresent(0L) shouldBe true
     }
 
+    "consider Boolean always present" in {
+      implicitly[FieldPresence[Boolean]].isPresent(true) shouldBe true
+      implicitly[FieldPresence[Boolean]].isPresent(false) shouldBe true
+    }
+
     "consider Double absent when NaN" in {
       implicitly[FieldPresence[Double]].isPresent(1.0) shouldBe true
       implicitly[FieldPresence[Double]].isPresent(Double.NaN) shouldBe false

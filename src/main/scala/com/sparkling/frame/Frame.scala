@@ -97,7 +97,10 @@ final case class Frame(df: DataFrame) {
   def maybeDo(cond: Boolean)(f: Frame => Frame): Frame =
     if (cond) f(this) else this
 
-  /** Returns the number of rows. */
+  /** Returns the number of rows.
+    *
+    * @note Triggers a Spark action. Avoid calling more than once per logical check — cache first if re-use is needed.
+    */
   def count(): Long = df.count()
 
   /** Prints the schema to stdout (side effect). */
@@ -171,6 +174,7 @@ final case class Frame(df: DataFrame) {
 
   /** Takes up to `num` rows after projecting the requested fields and decoding them as `T`.
     *
+    * @note Triggers a Spark action.
     * @param fs fields to project before decoding (must be non-empty)
     * @param num maximum number of rows to take
     * @tparam T target element type (must have an implicit Spark `Encoder`)
@@ -181,21 +185,21 @@ final case class Frame(df: DataFrame) {
     ArraySeq.unsafeWrapArray(df.select(fs.names.map(sqlf.col): _*).as[T].take(num))
   }
 
-  /** Repartitions to a fixed number of partitions.
+  /** Repartitions to a fixed number of partitions (triggers a full shuffle).
     *
     * @param numPartitions target number of partitions
     */
   def repartition(numPartitions: Int): Frame =
     Frame(df.repartition(numPartitions))
 
-  /** Repartitions by key columns.
+  /** Repartitions by key columns (triggers a full shuffle).
     *
     * @param fs key columns
     */
   def repartition(fs: Fields): Frame =
     Frame(df.repartition(fs.names.map(sqlf.col): _*))
 
-  /** Repartitions to a fixed number of partitions, using key columns for distribution.
+  /** Repartitions to a fixed number of partitions, using key columns for distribution (triggers a full shuffle).
     *
     * @param numPartitions target number of partitions
     * @param fs key columns
@@ -224,7 +228,7 @@ final case class Frame(df: DataFrame) {
     Frame(df.sortWithinPartitions(cols: _*))
   }
 
-  /** Orders globally by the given columns (ascending by default).
+  /** Orders globally by the given columns (ascending by default). Triggers a full shuffle.
     *
     * @param fs columns to sort by (must be non-empty)
     * @param descending if true, sorts descending; ascending by default
@@ -943,7 +947,7 @@ final case class Frame(df: DataFrame) {
     *   3. Unpack the result struct into the `out` fields, dropping temporary columns.
     *
     * The `outStructType` parameter must match the Spark schema of the struct returned by `f`. When working with
-    * [[com.sparkling.row.types.RecordSchema RecordSchema]], use
+    * [[com.sparkling.row.schema.RecordSchema RecordSchema]], use
     * [[com.sparkling.schema.SparkSchema.toStructType SparkSchema.toStructType]] to derive it.
     *
     * Prefer [[mapRecord]] when a [[com.sparkling.row.convert.RowDecoder RowDecoder]] /
@@ -1018,6 +1022,16 @@ final case class Frame(df: DataFrame) {
     exploded.unpack(tmpElem -> out)
   }
 
+  private def prepareRecordTransform[A, B](in: Fields, out: Fields)(implicit
+      dec: RowDecoder[A],
+      enc: RowEncoder[B]
+  ): (StructType, RowDecoder[A], RowEncoder[B], StructType) = {
+    val inStructType = StructType(in.names.iterator.map(n => schema(schema.fieldIndex(n))).toArray)
+    val alignedDec = dec.alignTo(in)
+    val alignedEnc = enc.alignTo(out)
+    (inStructType, alignedDec, alignedEnc, SparkSchema.toStructType(alignedEnc.schema))
+  }
+
   /** Applies a typed `A => B` transform over selected input columns, writing results to output columns.
     *
     * Input columns are packed into a temporary struct, decoded into `A` via
@@ -1039,16 +1053,10 @@ final case class Frame(df: DataFrame) {
     val (in, out) = fs
     require(in.nonEmpty, "mapRecord requires at least one input field")
     require(out.nonEmpty, "mapRecord requires at least one output field")
-
-    val inStructType = StructType(in.names.iterator.map(n => schema(schema.fieldIndex(n))).toArray)
-    val alignedDec = dec.alignTo(in)
-    val alignedEnc = enc.alignTo(out)
-    val outStructType = SparkSchema.toStructType(alignedEnc.schema)
-
+    val (inStructType, alignedDec, alignedEnc, outStructType) = prepareRecordTransform(in, out)
     mapStruct(in -> out, outStructType, deterministic) { row =>
       val baseIn = SparkRowBridge.fromSparkRow(row, inStructType)
-      val b = f(alignedDec.from(baseIn))
-      SparkRowBridge.toSparkRow(alignedEnc.to(b), alignedEnc.schema)
+      SparkRowBridge.toSparkRow(alignedEnc.to(f(alignedDec.from(baseIn))), alignedEnc.schema)
     }
   }
 
@@ -1076,12 +1084,7 @@ final case class Frame(df: DataFrame) {
     val (in, out) = fs
     require(in.nonEmpty, "flatMapRecord requires at least one input field")
     require(out.nonEmpty, "flatMapRecord requires at least one output field")
-
-    val inStructType = StructType(in.names.iterator.map(n => schema(schema.fieldIndex(n))).toArray)
-    val alignedDec = dec.alignTo(in)
-    val alignedEnc = enc.alignTo(out)
-    val outStructType = SparkSchema.toStructType(alignedEnc.schema)
-
+    val (inStructType, alignedDec, alignedEnc, outStructType) = prepareRecordTransform(in, out)
     mapArrayStruct(in -> out, outStructType, deterministic, outer) { row =>
       val baseIn = SparkRowBridge.fromSparkRow(row, inStructType)
       val result = f(alignedDec.from(baseIn))
@@ -1143,12 +1146,13 @@ final case class Frame(df: DataFrame) {
     * @param how join strategy (default [[JoinType.Inner]])
     * @throws java.lang.IllegalArgumentException if `on` is empty
     */
-  def join(on: Fields, other: Frame, how: JoinType): Frame =
+  def join(on: Fields, other: Frame, how: JoinType): Frame = {
+    require(on.nonEmpty, "join requires at least one key field")
     Frame(df.join(other.df, on.names, how.sparkName))
+  }
 
   /** Joins this Frame against `other` on shared key columns using an inner join. */
-  def join(on: Fields, other: Frame): Frame =
-    Frame(df.join(other.df, on.names, JoinType.Inner.sparkName))
+  def join(on: Fields, other: Frame): Frame = join(on, other, JoinType.Inner)
 
   /** Stacks this Frame on top of `other`, aligning columns by name and padding missing columns with nulls.
     *

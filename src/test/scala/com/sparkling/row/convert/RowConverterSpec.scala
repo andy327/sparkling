@@ -5,7 +5,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 import com.sparkling.row.Row
 import com.sparkling.row.codec.ValueCodec
-import com.sparkling.row.types.{RecordSchema, SchemaField, ValueType}
+import com.sparkling.row.schema.{RecordSchema, SchemaField, ValueType}
 import com.sparkling.schema.Fields
 
 object RowConverterSpec {

@@ -5,7 +5,7 @@ import org.apache.spark.sql.types._
 import org.scalatest.matchers.should.Matchers._
 import org.scalatest.wordspec.AnyWordSpec
 
-import com.sparkling.row.types.{RecordSchema, SchemaField, ValueType}
+import com.sparkling.row.schema.{RecordSchema, SchemaField, ValueType}
 import com.sparkling.schema.Fields
 
 final class SparkRowBridgeSpec extends AnyWordSpec {

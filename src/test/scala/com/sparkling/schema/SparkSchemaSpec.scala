@@ -4,7 +4,7 @@ import org.apache.spark.sql.types._
 import org.scalatest.matchers.should.Matchers._
 import org.scalatest.wordspec.AnyWordSpec
 
-import com.sparkling.row.types._
+import com.sparkling.row.schema._
 
 final class SparkSchemaSpec extends AnyWordSpec {
 

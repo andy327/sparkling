@@ -142,6 +142,15 @@ final class FrameRelationalSpec extends AnyWordSpec with SparkSuite {
 
       out.collect().toList shouldBe List(Row(1, "a"))
     }
+
+    "throw when keys are empty" in {
+      val left = Seq((1, "a")).toDF("id", "v")
+      val right = Seq((1, "x")).toDF("id", "rv")
+      val ex = intercept[IllegalArgumentException] {
+        left.frame.join(Fields.empty, right.frame, JoinType.Inner)
+      }
+      ex.getMessage should include("join requires at least one key field")
+    }
   }
 
   "Frame.++" should {

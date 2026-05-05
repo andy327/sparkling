@@ -65,7 +65,7 @@ final case class WindowedFrame private[frame] (
 
   /** Assigns a rank within each partition. Equal values share the same rank; the next rank skips accordingly.
     *
-    * Requires [[orderBy]] to be set.
+    * Requires `orderBy` to be called first.
     *
     * @param out output column to write the rank into
     */
@@ -74,7 +74,7 @@ final case class WindowedFrame private[frame] (
 
   /** Assigns a dense rank within each partition. Equal values share the same rank; no ranks are skipped.
     *
-    * Requires [[orderBy]] to be set.
+    * Requires `orderBy` to be called first.
     *
     * @param out output column to write the rank into
     */
@@ -83,7 +83,7 @@ final case class WindowedFrame private[frame] (
 
   /** Assigns a unique sequential row number within each partition, starting at 1.
     *
-    * Requires [[orderBy]] to be set.
+    * Requires `orderBy` to be called first.
     *
     * @param out output column to write the row number into
     */
@@ -92,7 +92,7 @@ final case class WindowedFrame private[frame] (
 
   /** Divides each partition into `n` equal-sized buckets and assigns each row a bucket number (1 to `n`).
     *
-    * Requires [[orderBy]] to be set.
+    * Requires `orderBy` to be called first.
     *
     * @param n number of buckets (must be positive)
     * @param out output column to write the bucket number into
@@ -102,7 +102,7 @@ final case class WindowedFrame private[frame] (
 
   /** Assigns a percent rank within each partition: `(rank - 1) / (total rows - 1)`.
     *
-    * Requires [[orderBy]] to be set.
+    * Requires `orderBy` to be called first.
     *
     * @param out output column to write the percent rank into
     */
@@ -113,7 +113,7 @@ final case class WindowedFrame private[frame] (
 
   /** Returns the value of the input column `offset` rows before the current row within the partition.
     *
-    * Returns null when the offset falls before the partition boundary. Requires [[orderBy]] to be set.
+    * Returns null when the offset falls before the partition boundary. Requires `orderBy` to be called first.
     *
     * @param fs input → output field mapping (single field on each side)
     * @param offset number of rows to look back (default 1)
@@ -126,7 +126,7 @@ final case class WindowedFrame private[frame] (
 
   /** Returns the value of the input column `offset` rows after the current row within the partition.
     *
-    * Returns null when the offset falls after the partition boundary. Requires [[orderBy]] to be set.
+    * Returns null when the offset falls after the partition boundary. Requires `orderBy` to be called first.
     *
     * @param fs input → output field mapping (single field on each side)
     * @param offset number of rows to look ahead (default 1)

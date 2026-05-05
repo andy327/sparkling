@@ -1,4 +1,4 @@
-package com.sparkling.row.types
+package com.sparkling.row.schema
 
 /** Sealed ADT describing the runtime type of a value stored in a [[com.sparkling.row.Row]].
   *

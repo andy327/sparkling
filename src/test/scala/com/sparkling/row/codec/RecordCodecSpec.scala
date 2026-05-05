@@ -5,7 +5,7 @@ import org.scalatest.wordspec.AnyWordSpec
 import shapeless._
 
 import com.sparkling.row.Row
-import com.sparkling.row.types.ValueType._
+import com.sparkling.row.schema.ValueType._
 import com.sparkling.schema.Fields
 
 final private case class Point(x: Double, y: Double)

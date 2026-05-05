@@ -22,6 +22,7 @@ object FieldPresence {
   // primitives + generic derivation
 
   implicit val presenceString: FieldPresence[String] = Option(_).map(_.trim).filter(_.nonEmpty).isDefined
+  implicit val presenceBoolean: FieldPresence[Boolean] = _ => true
   implicit val presenceInt: FieldPresence[Int] = _ => true
   implicit val presenceLong: FieldPresence[Long] = _ => true
   implicit val presenceDouble: FieldPresence[Double] = !java.lang.Double.isNaN(_)

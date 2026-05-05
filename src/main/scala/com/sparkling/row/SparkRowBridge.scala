@@ -5,7 +5,7 @@ import scala.collection.immutable.ArraySeq
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.{Row => SparkRow}
 
-import com.sparkling.row.types.{RecordSchema, ValueType}
+import com.sparkling.row.schema.{RecordSchema, ValueType}
 import com.sparkling.schema.Fields
 
 /** Internal bridge between Spark SQL struct rows and sparkling [[Row]]s.

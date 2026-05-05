@@ -69,9 +69,11 @@ final class Fields private (private val arr: Array[String]) extends FieldsLike {
   def indexOf(name: String): Int =
     index.getOrElse(name, -1)
 
-  /** True if this schema contains the given field name. */
+  /** True if this schema contains the given field name. O(1) via index lookup. */
   def containsName(name: String): Boolean =
     index.contains(name)
+
+  override def contains(name: String): Boolean = containsName(name)
 
   /** Returns the ordinal for name, or throws if not present. */
   def ordinalOf(name: String): Int =

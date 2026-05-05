@@ -1,9 +1,9 @@
-package com.sparkling.row.types
+package com.sparkling.row.schema
 
 import org.scalatest.matchers.should.Matchers._
 import org.scalatest.wordspec.AnyWordSpec
 
-final class RowTypesSpec extends AnyWordSpec {
+final class RowSchemaSpec extends AnyWordSpec {
 
   import ValueType._
 
