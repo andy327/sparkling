@@ -2,8 +2,6 @@ package com.sparkling.schema
 
 import java.util.UUID
 
-import scala.collection.immutable.ArraySeq
-
 /** Represents a single validated field name.
   *
   * Invariants:
@@ -14,7 +12,7 @@ final class Field private (val name: String) extends FieldsLike {
 
   private[this] val arr: Array[String] = Array(name)
 
-  override def names: IndexedSeq[String] = ArraySeq.unsafeWrapArray(arr)
+  override def names: IndexedSeq[String] = arr.toVector
 
   override def fields: Fields = Fields.one(this)
 

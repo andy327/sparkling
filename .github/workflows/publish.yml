@@ -1,12 +1,12 @@
-name: Scaladocs
+name: Publish
 
 on:
   push:
-    branches: [main]
-  workflow_dispatch: {}
+    tags: ['v*']
 
 jobs:
-  scaladoc:
+  publish:
+    name: Publish to Maven Central
     runs-on: ubuntu-latest
 
     steps:
@@ -36,12 +36,23 @@ jobs:
           restore-keys: |
             sbt-${{ runner.os }}-
 
-      - name: Generate Scaladoc (2.12 + 2.13)
-        run: sbt +doc
-
-      - name: Upload Scaladoc
-        uses: actions/upload-artifact@v4
+      - name: Import GPG key
+        uses: crazy-max/ghaction-import-gpg@v6
         with:
-          name: sparkling-scaladoc
-          path: target/scala-*/api
-          if-no-files-found: error
+          gpg_private_key: ${{ secrets.GPG_PRIVATE_KEY }}
+          passphrase: ${{ secrets.GPG_PASSPHRASE }}
+
+      - name: Run cross-build tests
+        run: sbt +test
+
+      - name: Publish signed artifacts
+        run: sbt +publishSigned
+        env:
+          SONATYPE_USERNAME: ${{ secrets.SONATYPE_USERNAME }}
+          SONATYPE_PASSWORD: ${{ secrets.SONATYPE_PASSWORD }}
+
+      - name: Release bundle to Maven Central
+        run: sbt sonatypeBundleRelease
+        env:
+          SONATYPE_USERNAME: ${{ secrets.SONATYPE_USERNAME }}
+          SONATYPE_PASSWORD: ${{ secrets.SONATYPE_PASSWORD }}

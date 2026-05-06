@@ -1,7 +1,5 @@
 package com.sparkling.frame
 
-import scala.collection.immutable.ArraySeq
-
 import org.apache.spark.sql.catalyst.encoders.ExpressionEncoder
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.{functions => sqlf, Column, DataFrame, Row => SparkRow}
@@ -142,6 +140,6 @@ private[frame] object StreamExecutor {
     var j = 0
     while (j < o) { arr(k + j) = r2.get(j); j += 1 }
 
-    SparkRow.fromSeq(ArraySeq.unsafeWrapArray(arr))
+    SparkRow.fromSeq(arr.toSeq)
   }
 }

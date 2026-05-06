@@ -216,7 +216,7 @@ final class FrameTransformSpec extends AnyWordSpec with SparkSuite {
 
       out.columns.toSeq should contain("id")
       out.select("id").as[String].collect().foreach { id =>
-        uuidPattern.matches(id) shouldBe true
+        id.matches(uuidPattern.regex) shouldBe true
       }
     }
 

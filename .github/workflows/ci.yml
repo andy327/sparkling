@@ -2,13 +2,13 @@ name: CI
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   pull_request:
-    branches: [ main ]
+    branches: [main]
 
 jobs:
-  test:
-    name: Tests and coverage report
+  ci:
+    name: Lint, format, and test (2.12 + 2.13)
     runs-on: ubuntu-latest
 
     steps:
@@ -38,51 +38,11 @@ jobs:
           restore-keys: |
             sbt-${{ runner.os }}-
 
-      - name: Run tests with coverage
-        run: sbt clean coverage test
-
-      - name: Generate coverage report
-        run: sbt coverageReport
+      - name: Run CI (lint, format, cross-build, test with coverage)
+        run: sbt ci
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: true
-
-  formatting:
-    name: Scalafmt and Scalafix checks
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout repo
-        uses: actions/checkout@v4
-
-      - name: Set up JDK 17 (Temurin)
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '17'
-          cache: sbt
-
-      - name: Install SBT (via Coursier)
-        uses: coursier/setup-action@v1
-        with:
-          apps: sbt
-
-      - name: Cache Ivy2 and Coursier
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.ivy2/cache
-            ~/.cache/coursier
-            ~/.sbt
-          key: sbt-${{ runner.os }}-${{ hashFiles('**/build.sbt', '**/project/*.sbt', '**/project/build.properties') }}
-          restore-keys: |
-            sbt-${{ runner.os }}-
-
-      - name: Scalafmt check
-        run: sbt scalafmtCheckAll scalafmtSbtCheck
-
-      - name: Scalafix check
-        run: sbt "scalafixAll --check"

@@ -274,8 +274,10 @@ object ValueCodec {
           case m: scala.collection.Map[_, _] =>
             m.iterator.map { case (k, v) => kc.decodeUnsafe(k) -> vc.decodeUnsafe(v) }.toMap
           case jm: java.util.Map[_, _] =>
-            import scala.jdk.CollectionConverters._
-            jm.asScala.iterator.map { case (k, v) => kc.decodeUnsafe(k) -> vc.decodeUnsafe(v) }.toMap
+            val it = jm.entrySet().iterator()
+            val b = Map.newBuilder[K, V]
+            while (it.hasNext) { val e = it.next(); b += kc.decodeUnsafe(e.getKey) -> vc.decodeUnsafe(e.getValue) }
+            b.result()
           case x =>
             throw new ClassCastException(s"Cannot decode Map from value=$x (${x.getClass.getName})")
         }

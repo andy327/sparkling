@@ -1,7 +1,5 @@
 package com.sparkling.evidence
 
-import scala.collection.immutable.ArraySeq
-
 /** Evidence that a value of type `R` can be treated as a collection of elements suitable for Spark `explode`.
   *
   * Accepts functions returning a collection (`Seq[A]`, `Array[A]`) or a "0-or-1" container (`Option[A]`), converting
@@ -30,7 +28,7 @@ object ExplodeEvidence {
   implicit def forArray[A]: Aux[Array[A], A] =
     new ExplodeEvidence[Array[A]] {
       type Elem = A
-      def toSeq(r: Array[A]): Seq[A] = if (r == null) Seq.empty else ArraySeq.unsafeWrapArray(r)
+      def toSeq(r: Array[A]): Seq[A] = if (r == null) Seq.empty else r.toVector
     }
 
   implicit def forOption[A]: Aux[Option[A], A] =

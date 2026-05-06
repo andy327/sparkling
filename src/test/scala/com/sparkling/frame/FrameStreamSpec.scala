@@ -133,7 +133,7 @@ final class FrameStreamSpec extends AnyWordSpec with Matchers with SparkSuite {
       val result =
         input.streamBy(Fields("city", "country")) {
           _.mapGroups(Fields("score", "name") -> Fields("total")) { _: Iterator[(Int, String)] =>
-            Iterator.empty[Int]
+            Iterator.empty: Iterator[Int]
           }
         }.df
 

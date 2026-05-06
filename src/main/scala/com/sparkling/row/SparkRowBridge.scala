@@ -1,7 +1,5 @@
 package com.sparkling.row
 
-import scala.collection.immutable.ArraySeq
-
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.{Row => SparkRow}
 
@@ -72,6 +70,6 @@ object SparkRowBridge {
       i += 1
     }
 
-    SparkRow.fromSeq(ArraySeq.unsafeWrapArray(arr))
+    SparkRow.fromSeq(arr.toSeq)
   }
 }

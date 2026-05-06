@@ -12,7 +12,6 @@ import java.lang.{
 import java.math.BigDecimal
 import java.sql.Date
 
-import scala.annotation.unused
 import scala.reflect.ClassTag
 import scala.reflect.runtime.universe.TypeTag
 
@@ -113,46 +112,51 @@ object EncoderEvidence extends BoilerplateEncoderEvidence with LowPriorityEncode
   implicit val forDate: ExprEncoderEvidence[Date] = forExpr[Date]
   implicit val forVector: ExprEncoderEvidence[Vector] = forExpr[Vector]
 
-  implicit def forSeq[T](implicit
-      @unused ev: ExprEncoderEvidence[T],
-      tt: TypeTag[Seq[T]]
-  ): ExprEncoderEvidence[Seq[T]] =
-    forExpr[Seq[T]]
+  implicit def forSeq[T](implicit ev: ExprEncoderEvidence[T], tt: TypeTag[Seq[T]]): ExprEncoderEvidence[Seq[T]] = {
+    val _ = ev; forExpr[Seq[T]]
+  }
 
   implicit def forArray[T](implicit
-      @unused ev: ExprEncoderEvidence[T],
+      ev: ExprEncoderEvidence[T],
       tt: TypeTag[Array[T]]
-  ): ExprEncoderEvidence[Array[T]] =
-    forExpr[Array[T]]
+  ): ExprEncoderEvidence[Array[T]] = {
+    val _ = ev; forExpr[Array[T]]
+  }
 
   implicit def forOption[T](implicit
-      @unused ev: ExprEncoderEvidence[T],
+      ev: ExprEncoderEvidence[T],
       tt: TypeTag[Option[T]]
-  ): ExprEncoderEvidence[Option[T]] =
-    forExpr[Option[T]]
+  ): ExprEncoderEvidence[Option[T]] = {
+    val _ = ev; forExpr[Option[T]]
+  }
 
   implicit def forMap[K, V](implicit
-      @unused kev: ExprEncoderEvidence[K],
-      @unused vev: ExprEncoderEvidence[V],
+      kev: ExprEncoderEvidence[K],
+      vev: ExprEncoderEvidence[V],
       tt: TypeTag[Map[K, V]]
-  ): ExprEncoderEvidence[Map[K, V]] =
-    forExpr[Map[K, V]]
+  ): ExprEncoderEvidence[Map[K, V]] = {
+    val _ = (kev, vev); forExpr[Map[K, V]]
+  }
 
   trait HListExprEncoderConstraint[R]
   object HListExprEncoderConstraint {
     implicit val hnil: HListExprEncoderConstraint[HNil] = new HListExprEncoderConstraint[HNil] {}
 
     implicit def hcons[HeadName, HeadVal, Tail <: HList](implicit
-        @unused head: ExprEncoderEvidence[HeadVal],
-        @unused tail: HListExprEncoderConstraint[Tail]
-    ): HListExprEncoderConstraint[FieldType[HeadName, HeadVal] :: Tail] =
+        head: ExprEncoderEvidence[HeadVal],
+        tail: HListExprEncoderConstraint[Tail]
+    ): HListExprEncoderConstraint[FieldType[HeadName, HeadVal] :: Tail] = {
+      val _ = (head, tail)
       new HListExprEncoderConstraint[FieldType[HeadName, HeadVal] :: Tail] {}
+    }
   }
 
   implicit def forProduct[T <: Product, R](implicit
-      @unused gen: LabelledGeneric.Aux[T, R],
-      @unused ok: HListExprEncoderConstraint[R],
+      gen: LabelledGeneric.Aux[T, R],
+      ok: HListExprEncoderConstraint[R],
       tt: TypeTag[T]
-  ): ExprEncoderEvidence[T] =
+  ): ExprEncoderEvidence[T] = {
+    val _ = (gen, ok)
     forExpr[T]
+  }
 }

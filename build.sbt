@@ -1,21 +1,38 @@
-ThisBuild / organization := "com.sparkling"
+ThisBuild / organization := "io.github.andy327"
+ThisBuild / organizationName := "Andres Perez"
+ThisBuild / organizationHomepage := Some(url("https://github.com/andy327/sparkling"))
 ThisBuild / version := "0.1.0-SNAPSHOT"
+ThisBuild / versionScheme := Some("early-semver")
 ThisBuild / scalaVersion := "2.13.8"
 
-// Required for Scalafix semantic rules
+ThisBuild / scalacOptions ++= {
+  CrossVersion.partialVersion(scalaVersion.value) match {
+    case Some((2, 12)) => Seq("-deprecation", "-Ywarn-unused", "-Ywarn-unused-import", "-language:higherKinds")
+    case _             => Seq("-deprecation", "-Wunused", "-Wunused:imports")
+  }
+}
+
+// SemanticDB enables Scalafix semantic rules
 ThisBuild / semanticdbEnabled := true
-ThisBuild / scalafixScalaBinaryVersion := CrossVersion.binaryScalaVersion((ThisBuild / scalaVersion).value)
+ThisBuild / scalafixScalaBinaryVersion := CrossVersion.binaryScalaVersion(scalaVersion.value)
 
-ThisBuild / coverageEnabled := true
-
-ThisBuild / scalacOptions ++= Seq(
-  "-deprecation",
-  "-Wunused",
-  "-Wunused:imports"
+// Publishing
+ThisBuild / homepage := Some(url("https://github.com/andy327/sparkling"))
+ThisBuild / description := "Sparkling — a typed Scala DSL for Spark DataFrames"
+ThisBuild / licenses := List("MIT" -> url("https://opensource.org/licenses/MIT"))
+ThisBuild / developers := List(
+  Developer("andy327", "Andres Perez", "andy327@gmail.com", url("https://github.com/andy327"))
 )
+ThisBuild / scmInfo := Some(
+  ScmInfo(
+    url("https://github.com/andy327/sparkling"),
+    "scm:git@github.com:andy327/sparkling.git"
+  )
+)
+ThisBuild / sonatypeCredentialHost := "central.sonatype.com"
 
 addCommandAlias("formatAll", ";scalafixAll;scalafixAll;scalafmtAll;scalafmtAll;scalafmtSbt")
-addCommandAlias("ci", ";clean;scalafixAll --check;scalafmtCheckAll;scalafmtSbtCheck;coverage;test;coverageAggregate")
+addCommandAlias("ci", ";+clean;scalafixAll --check;scalafmtCheckAll;scalafmtSbtCheck;coverage;+test;coverageReport")
 
 val sparkVersion = "3.5.2"
 val scalatestVersion = "3.2.19"
@@ -35,7 +52,8 @@ lazy val sparkJdk17Flags = Seq(
 )
 
 lazy val noUnusedInConsoles = {
-  def dropUnused(opts: Seq[String]) = opts.filterNot(_.startsWith("-Wunused"))
+  def dropUnused(opts: Seq[String]) =
+    opts.filterNot(o => o.startsWith("-Wunused") || o.startsWith("-Ywarn-unused"))
   Seq(
     Compile / console / scalacOptions := dropUnused((Compile / console / scalacOptions).value),
     Test / console / scalacOptions := dropUnused((Test / console / scalacOptions).value)
@@ -46,6 +64,14 @@ lazy val sparkling = (project in file("."))
   .enablePlugins(spray.boilerplate.BoilerplatePlugin)
   .settings(
     name := "sparkling",
+    crossScalaVersions := Seq("2.12.18", "2.13.8"),
+    // Scaladoc: suppress unresolvable Java class links in 2.12's old Scaladoc tool
+    Compile / doc / scalacOptions ++= {
+      CrossVersion.partialVersion(scalaVersion.value) match {
+        case Some((2, 12)) => Seq("-no-link-warnings")
+        case _             => Nil
+      }
+    },
     libraryDependencies ++= Seq(
       "com.chuusai" %% "shapeless" % shapelessVersion,
       "net.openhft" % "zero-allocation-hashing" % zeroAllocHashingVersion,
@@ -55,6 +81,8 @@ lazy val sparkling = (project in file("."))
       "org.apache.spark" %% "spark-mllib" % sparkVersion % "provided",
       "org.scalatest" %% "scalatest" % scalatestVersion % Test
     ),
+    publishTo := sonatypePublishToBundle.value,
+    useGpgPinentry := true,
     Test / fork := true,
     Test / envVars += ("SPARK_LOCAL_IP" -> "127.0.0.1"),
     Test / javaOptions ++= sparkJdk17Flags,

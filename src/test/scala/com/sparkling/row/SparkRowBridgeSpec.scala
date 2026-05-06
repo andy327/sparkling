@@ -1,7 +1,7 @@
 package com.sparkling.row
 
-import org.apache.spark.sql.Row
 import org.apache.spark.sql.types._
+import org.apache.spark.sql.{Row => SparkRow}
 import org.scalatest.matchers.should.Matchers._
 import org.scalatest.wordspec.AnyWordSpec
 
@@ -19,7 +19,7 @@ final class SparkRowBridgeSpec extends AnyWordSpec {
         )
       )
 
-      val out = SparkRowBridge.fromSparkRow(Row(1, null), schema)
+      val out = SparkRowBridge.fromSparkRow(SparkRow(1, null), schema)
 
       out.schema shouldBe Fields("a", "b")
       out.getAs[Int]("a") shouldBe Some(1)
@@ -51,7 +51,7 @@ final class SparkRowBridgeSpec extends AnyWordSpec {
       )
 
       val out = SparkRowBridge.fromSparkRow(
-        Row(1, Row(7, "hi")),
+        SparkRow(1, SparkRow(7, "hi")),
         schema
       )
 
@@ -81,7 +81,7 @@ final class SparkRowBridgeSpec extends AnyWordSpec {
       )
 
       val out = SparkRowBridge.fromSparkRow(
-        Row(1, null),
+        SparkRow(1, null),
         schema
       )
 
@@ -107,7 +107,7 @@ final class SparkRowBridgeSpec extends AnyWordSpec {
           Array[Any](1, "x")
         )
 
-      SparkRowBridge.toSparkRow(base, schema) shouldBe Row(1, "x")
+      SparkRowBridge.toSparkRow(base, schema) shouldBe SparkRow(1, "x")
     }
 
     "preserve null field values" in {
@@ -125,7 +125,7 @@ final class SparkRowBridgeSpec extends AnyWordSpec {
           Array[Any](null, "x")
         )
 
-      SparkRowBridge.toSparkRow(base, schema) shouldBe Row(null, "x")
+      SparkRowBridge.toSparkRow(base, schema) shouldBe SparkRow(null, "x")
     }
 
     "return a Spark row of nulls when the sparkling row itself is null" in {
@@ -137,7 +137,7 @@ final class SparkRowBridgeSpec extends AnyWordSpec {
           )
         )
 
-      SparkRowBridge.toSparkRow(null, schema) shouldBe Row(null, null)
+      SparkRowBridge.toSparkRow(null, schema) shouldBe SparkRow(null, null)
     }
 
     "convert a nested sparkling row into a nested Spark row for ObjectType" in {
@@ -169,7 +169,7 @@ final class SparkRowBridgeSpec extends AnyWordSpec {
           Array[Any](1, nested)
         )
 
-      SparkRowBridge.toSparkRow(base, schema) shouldBe Row(1, Row(7, "hi"))
+      SparkRowBridge.toSparkRow(base, schema) shouldBe SparkRow(1, SparkRow(7, "hi"))
     }
 
     "preserve null nested object values" in {
@@ -194,7 +194,7 @@ final class SparkRowBridgeSpec extends AnyWordSpec {
           Array[Any](1, null)
         )
 
-      SparkRowBridge.toSparkRow(base, schema) shouldBe Row(1, null)
+      SparkRowBridge.toSparkRow(base, schema) shouldBe SparkRow(1, null)
     }
   }
 }

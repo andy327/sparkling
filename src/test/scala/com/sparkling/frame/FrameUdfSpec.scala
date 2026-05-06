@@ -307,7 +307,7 @@ final class FrameUdfSpec extends AnyWordSpec with SparkSuite {
       val df = Seq(1, 2).toDF("x")
       val out = df.frame
         .flatMapRecord[Int, Int](Fields("x") -> Fields("y")) { _ =>
-          null.asInstanceOf[IterableOnce[Int]]
+          null.asInstanceOf[Iterable[Int]]
         }
         .df
 

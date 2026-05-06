@@ -1,7 +1,5 @@
 package com.sparkling.schema
 
-import scala.collection.immutable.ArraySeq
-
 /** Represents an ordered, distinct, and validated set of field names.
   *
   * General-purpose schema fragment used to group input/output columns consistently.
@@ -21,7 +19,7 @@ final class Fields private (private val arr: Array[String]) extends FieldsLike {
 
   /** Names view (does not copy). */
   override def names: IndexedSeq[String] =
-    ArraySeq.unsafeWrapArray(arr)
+    arr.toVector
 
   def size: Int = arr.length
 
@@ -208,7 +206,7 @@ object Fields {
     *   Fields("b", "c"),
     *   Fields("a", "d")
     * )
-    * // merged.names == ArraySeq("a","b","c","d")
+    * // merged.names == Vector("a","b","c","d")
     * }}}
     */
   def merge(all: Fields*): Fields = {
@@ -270,7 +268,7 @@ object Fields {
           curSet += cur(j)
           j += 1
         }
-        common.filterInPlace(curSet.contains)
+        common --= common.filterNot(curSet.contains(_))
         ai += 1
       }
 

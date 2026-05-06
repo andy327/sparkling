@@ -1,6 +1,5 @@
 package com.sparkling.frame
 
-import scala.annotation.unused
 import scala.reflect.ClassTag
 import scala.reflect.runtime.universe.TypeTag
 
@@ -366,10 +365,11 @@ final case class GroupedFrame(
     def apply[A: TypeTag: ClassTag, B, C: ClassTag](
         sqlAgg: SqlAggregator[A, B, C]
     )(implicit
-        @unused bEv: EncoderEvidence[B],
-        @unused cEv: EncoderEvidence[C],
-        @unused cTag: TypeTag[C]
+        bEv: EncoderEvidence[B],
+        cEv: EncoderEvidence[C],
+        cTag: TypeTag[C]
     ): GroupedFrame = {
+      val _ = (bEv, cEv, cTag)
       val (in, out) = fs
       require(in.nonEmpty, "aggregate requires at least one input field")
       require(out.nonEmpty, "aggregate requires at least one output field")
@@ -436,9 +436,10 @@ final case class GroupedFrame(
     def apply[A: TypeTag: ClassTag, B, C: ClassTag](
         sqlAgg: SqlAggregator[A, B, C]
     )(implicit
-        @unused bEv: EncoderEvidence[B],
-        @unused cEv: EncoderEvidence[C]
+        bEv: EncoderEvidence[B],
+        cEv: EncoderEvidence[C]
     ): GroupedFrame = {
+      val _ = (bEv, cEv)
       val (in, out) = fs
       require(in.nonEmpty, "aggregatePacked requires at least one input field")
       require(out.nonEmpty, "aggregatePacked requires at least one output field")

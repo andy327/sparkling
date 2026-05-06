@@ -1,6 +1,5 @@
 package com.sparkling.frame
 
-import scala.collection.immutable.ArraySeq
 import scala.reflect.runtime.universe.TypeTag
 
 import org.apache.spark.sql.api.java.UDF1
@@ -182,7 +181,7 @@ final case class Frame(df: DataFrame) {
     */
   def take[T: Encoder](fs: Fields, num: Int): IndexedSeq[T] = {
     require(fs.nonEmpty, "take requires at least one field")
-    ArraySeq.unsafeWrapArray(df.select(fs.names.map(sqlf.col): _*).as[T].take(num))
+    df.select(fs.names.map(sqlf.col): _*).as[T].take(num).toVector
   }
 
   /** Repartitions to a fixed number of partitions (triggers a full shuffle).
@@ -834,7 +833,7 @@ final case class Frame(df: DataFrame) {
     * @param out output column to write the hash into
     */
   def hash(out: Field): Frame = {
-    val cols = ArraySeq.unsafeWrapArray(df.columns.map(sqlf.col))
+    val cols = df.columns.map(sqlf.col).toVector
     Frame(df.withColumn(out.name, sqlf.xxhash64(cols: _*)))
   }
 
@@ -1060,7 +1059,7 @@ final case class Frame(df: DataFrame) {
     }
   }
 
-  /** Applies a typed `A => IterableOnce[B]` transform over selected input columns, expanding into zero or more rows.
+  /** Applies a typed `A => Iterable[B]` transform over selected input columns, expanding into zero or more rows.
     *
     * Input columns are packed and decoded into `A` via [[com.sparkling.row.convert.RowDecoder RowDecoder]], `f` is
     * applied, and each `B` result is encoded via [[com.sparkling.row.convert.RowEncoder RowEncoder]] and unpacked into
@@ -1068,7 +1067,7 @@ final case class Frame(df: DataFrame) {
     *
     * Null / empty semantics:
     *   - `null` return from `f`: treated as null (one null row if `outer = true`, zero rows otherwise)
-    *   - empty iterator: zero output rows (one null row if `outer = true`)
+    *   - empty result: zero output rows (one null row if `outer = true`)
     *
     * @param fs mapping from input columns to output columns (both sides must be non-empty)
     * @param deterministic set `false` if `f` depends on randomness or external state
@@ -1080,7 +1079,7 @@ final case class Frame(df: DataFrame) {
       fs: (Fields, Fields),
       deterministic: Boolean = true,
       outer: Boolean = false
-  )(f: A => IterableOnce[B])(implicit dec: RowDecoder[A], enc: RowEncoder[B]): Frame = {
+  )(f: A => Iterable[B])(implicit dec: RowDecoder[A], enc: RowEncoder[B]): Frame = {
     val (in, out) = fs
     require(in.nonEmpty, "flatMapRecord requires at least one input field")
     require(out.nonEmpty, "flatMapRecord requires at least one output field")
