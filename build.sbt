@@ -81,7 +81,12 @@ lazy val sparkling = (project in file("."))
       "org.apache.spark" %% "spark-mllib" % sparkVersion % "provided",
       "org.scalatest" %% "scalatest" % scalatestVersion % Test
     ),
-    publishTo := sonatypePublishToBundle.value,
+    publishTo := {
+      if (isSnapshot.value)
+        Some("Central Portal Snapshots" at "https://central.sonatype.com/repository/maven-snapshots/")
+      else
+        sonatypePublishToBundle.value
+    },
     useGpgPinentry := true,
     Test / fork := true,
     Test / envVars += ("SPARK_LOCAL_IP" -> "127.0.0.1"),
