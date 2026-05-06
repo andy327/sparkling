@@ -83,7 +83,7 @@ lazy val sparkling = (project in file("."))
     ),
     publishTo := {
       if (isSnapshot.value)
-        Some("Central Portal Snapshots" at "https://central.sonatype.com/repository/maven-snapshots/")
+        Some("Central Portal Snapshots".at("https://central.sonatype.com/repository/maven-snapshots/"))
       else
         sonatypePublishToBundle.value
     },
