@@ -9,11 +9,22 @@
 [![CI](https://github.com/andy327/sparkling/actions/workflows/ci.yml/badge.svg)](https://github.com/andy327/sparkling/actions/workflows/ci.yml)
 [![Scaladocs](https://github.com/andy327/sparkling/actions/workflows/scaladocs.yml/badge.svg)](https://github.com/andy327/sparkling/actions/workflows/scaladocs.yml)
 [![codecov](https://codecov.io/gh/andy327/sparkling/graph/badge.svg)](https://codecov.io/gh/andy327/sparkling)
+[![Maven Central](https://img.shields.io/maven-central/v/io.github.andy327/sparkling_2.13.svg)](https://central.sonatype.com/artifact/io.github.andy327/sparkling)
 [![Spark](https://img.shields.io/badge/Spark-3.5.2-darkorange?logo=apachespark&logoColor=darkorange)](https://spark.apache.org/releases/spark-release-3-5-2.html)
-[![Scala](https://img.shields.io/badge/Scala-2.13.8-red?logo=scala&logoColor=red)](https://www.scala-lang.org/download/2.13.8.html)
+[![Scala](https://img.shields.io/badge/Scala-2.12%20%7C%202.13-red?logo=scala&logoColor=red)](https://www.scala-lang.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 
 Sparkling is a Scala library that wraps Apache Spark's DataFrame API with a fluent, type-safe DSL. It replaces strongly-typed column expressions and verbose `agg()` calls with composable builders for grouping, streaming group operations, and window functions — while staying close enough to Spark that the underlying `DataFrame` is always a `.df` away.
+
+## Getting Started
+
+Add the following to your `build.sbt`:
+
+```scala
+libraryDependencies += "io.github.andy327" %% "sparkling" % "0.1.0"
+```
+
+Sparkling is published for Scala 2.12 and 2.13. Spark itself is a `provided` dependency — your project is expected to bring its own Spark runtime.
 
 ## Word Count
 
@@ -190,7 +201,7 @@ employees.frame
 
 ## Building and Testing
 
-Sparkling requires Scala 2.13 and JDK 17. Spark dependencies are marked `provided`, so you will need a Spark environment at runtime.
+Sparkling supports Scala 2.12 and 2.13 and requires JDK 17. Spark dependencies are marked `provided`, so you will need a Spark environment at runtime.
 
 ```
 # compile
