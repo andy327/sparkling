@@ -5,9 +5,17 @@ on:
     branches: [main]
   workflow_dispatch: {}
 
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
 jobs:
   scaladoc:
     runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
 
     steps:
       - name: Checkout repo
@@ -39,9 +47,31 @@ jobs:
       - name: Generate Scaladoc (2.12 + 2.13)
         run: sbt +doc
 
-      - name: Upload Scaladoc
-        uses: actions/upload-artifact@v4
+      - name: Assemble GitHub Pages site
+        run: |
+          mkdir -p _site/2.12
+          cp -r target/scala-2.12/api/. _site/2.12/
+          cp -r target/scala-2.13/api/. _site/
+          cat > _site/index.html <<'EOF'
+          <!DOCTYPE html>
+          <html>
+            <head>
+              <meta charset="utf-8">
+              <title>Sparkling API Docs</title>
+              <meta http-equiv="refresh" content="0; url=index.html">
+            </head>
+            <body>
+              <p>Redirecting to <a href="index.html">Scala 2.13 API docs</a>.</p>
+              <p>Also available: <a href="2.12/index.html">Scala 2.12 API docs</a>.</p>
+            </body>
+          </html>
+          EOF
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
         with:
-          name: sparkling-scaladoc
-          path: target/scala-*/api
-          if-no-files-found: error
+          path: _site
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

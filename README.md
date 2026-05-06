@@ -7,7 +7,7 @@
 </p>
 
 [![CI](https://github.com/andy327/sparkling/actions/workflows/ci.yml/badge.svg)](https://github.com/andy327/sparkling/actions/workflows/ci.yml)
-[![Scaladocs](https://github.com/andy327/sparkling/actions/workflows/scaladocs.yml/badge.svg)](https://github.com/andy327/sparkling/actions/workflows/scaladocs.yml)
+[![Scaladocs](https://github.com/andy327/sparkling/actions/workflows/scaladocs.yml/badge.svg)](https://andy327.github.io/sparkling/)
 [![codecov](https://codecov.io/gh/andy327/sparkling/graph/badge.svg)](https://codecov.io/gh/andy327/sparkling)
 [![Maven Central](https://img.shields.io/maven-central/v/io.github.andy327/sparkling_2.13.svg)](https://central.sonatype.com/artifact/io.github.andy327/sparkling_2.13)
 [![Spark](https://img.shields.io/badge/Spark-3.5.2-darkorange?logo=apachespark&logoColor=darkorange)](https://spark.apache.org/releases/spark-release-3-5-2.html)
